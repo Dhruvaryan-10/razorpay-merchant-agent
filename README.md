@@ -6,15 +6,15 @@ Premium merchant operations workspace that connects to WooCommerce and provides 
 
 ## Features
 
-✅ **Real WooCommerce Integration** - Connect to real WooCommerce stores with REST API v3
-✅ **Demo Mode** - Fully functional demo environment with synthetic data
-✅ **Orders** - View, search, and filter orders with detailed view
-✅ **Products** - Manage products with stock status and search
-✅ **Inventory** - Real-time inventory insights and low-stock alerts
-✅ **Customers** - Customer management and order history
-✅ **Merchant Agent** - Natural language queries about store data
-✅ **Premium UI** - Polished, enterprise-grade interface
-✅ **Secure Credentials** - Server-side credential encryption
+- ✅ **Real WooCommerce Integration** - Connect to real WooCommerce stores with REST API v3
+- ✅ **Demo Mode** - Fully functional demo environment with synthetic data
+- ✅ **Orders** - View, search, and filter orders with detailed view
+- ✅ **Products** - Manage products with stock status and search
+- ✅ **Inventory** - Real-time inventory insights and low-stock alerts
+- ✅ **Customers** - Customer management and order history
+- ✅ **Merchant Agent** - Natural language queries about store data
+- ✅ **Premium UI** - Polished, enterprise-grade interface
+- ✅ **Secure Credentials** - Server-side credential encryption
 
 ## Architecture
 
