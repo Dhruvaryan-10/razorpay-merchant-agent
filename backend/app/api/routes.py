@@ -180,8 +180,23 @@ async def get_dashboard(store_id: Optional[str] = None, db: Session = Depends(ge
         low_stock = len([p for p in products if p.get("stock_status") in ["lowstock", "outofstock"]])
         out_of_stock = len([p for p in products if p.get("stock_status") == "outofstock"])
 
-        # Recent orders
-        recent_orders = sorted(orders, key=lambda x: x.get("date_created", ""), reverse=True)[:5]
+        # Recent orders - normalize before returning
+        recent_orders_raw = sorted(orders, key=lambda x: x.get("date_created", ""), reverse=True)[:5]
+        recent_orders = []
+        for order in recent_orders_raw:
+            recent_orders.append({
+                "id": str(order.get("id", "")),
+                "order_number": str(order.get("number", order.get("id", ""))),
+                "external_id": order.get("id", 0),
+                "status": order.get("status", ""),
+                "total": float(order.get("total", 0)),
+                "currency": order.get("currency", "INR"),
+                "customer_id": order.get("customer_id"),
+                "customer_name": order.get("billing", {}).get("first_name", ""),
+                "customer_email": order.get("billing", {}).get("email", ""),
+                "payment_method": order.get("payment_method", ""),
+                "created_at": order.get("date_created", datetime.now().isoformat()),
+            })
 
         return {
             "store": {
@@ -200,7 +215,7 @@ async def get_dashboard(store_id: Optional[str] = None, db: Session = Depends(ge
                 "total_products": len(products),
                 "total_customers": len(customers),
             },
-            "recent_orders": recent_orders[:5],
+            "recent_orders": recent_orders,
             "insights": [
                 f"{low_stock} products approaching low stock" if low_stock > 0 else None,
                 f"₹{pending_value:.0f} tied up in {pending_orders} pending orders" if pending_orders > 0 else None,

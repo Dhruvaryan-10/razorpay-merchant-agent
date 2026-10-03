@@ -14,10 +14,10 @@ class AgentService:
         # More specific intents must come before general ones
         "high_value_pending_orders": {
             "patterns": [
-                r"pending\s+orders?\s+above\s+[\$₹]?\s*(\d+)",
-                r"find.*pending.*orders?.*[\$₹]?\s*(\d+)",
-                r"orders?\s+above\s+[\$₹]?\s*(\d+).*pending",
-                r"[\$₹]?\s*(\d+).*pending\s+orders?",
+                r"pending\s+orders?\s+above\s+[\$₹]?\s*([\d,]+)",
+                r"find.*pending.*orders?.*[\$₹]?\s*([\d,]+)",
+                r"orders?\s+above\s+[\$₹]?\s*([\d,]+).*pending",
+                r"[\$₹]?\s*([\d,]+).*pending\s+orders?",
             ],
             "tool": "search_orders_filtered",
             "params_pattern": True,
@@ -112,7 +112,8 @@ class AgentService:
 
                         if intent_name == "high_value_pending_orders":
                             try:
-                                amount = int(param_value)
+                                # Remove commas from number (e.g., "2,000" -> "2000")
+                                amount = int(param_value.replace(",", ""))
                                 return intent_name, {"status": "pending", "amount_threshold": amount}
                             except:
                                 pass

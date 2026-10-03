@@ -6,8 +6,8 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatDate, getStatusBadgeColor, getStatusText } from '@/lib/utils';
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Zap, Settings,
-  Menu, X, Search, ChevronRight, AlertCircle, Loader, Eye, EyeOff,
-  Plus, Filter, ChevronLeft
+  Menu, X, Search, ChevronRight, AlertCircle, Loader, Eye,
+  ChevronLeft
 } from 'lucide-react';
 
 interface AppLayoutProps {

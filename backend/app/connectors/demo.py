@@ -38,7 +38,7 @@ class DemoConnector(BaseMerchantConnector):
                     "country": "IN",
                 },
                 "orders_count": random.randint(1, 5),
-                "total_spent": str(random.randint(1000, 50000)),
+                "total_spent": random.randint(1000, 50000),
             })
 
         return customers
@@ -46,21 +46,21 @@ class DemoConnector(BaseMerchantConnector):
     def _generate_products(self) -> List[Dict[str, Any]]:
         """Generate synthetic products"""
         products = [
-            {"name": "Premium Wireless Headphones", "sku": "WH-001", "price": "4999", "stock": 25},
-            {"name": "USB-C Charging Cable", "sku": "USB-001", "price": "599", "stock": 100},
-            {"name": "Phone Stand", "sku": "STAND-001", "price": "1299", "stock": 8},
-            {"name": "Screen Protector", "sku": "SCREEN-001", "price": "399", "stock": 3},
-            {"name": "Portable Power Bank", "sku": "PB-001", "price": "2499", "stock": 0},
-            {"name": "Wireless Mouse", "sku": "MOUSE-001", "price": "2199", "stock": 45},
-            {"name": "Mechanical Keyboard", "sku": "KB-001", "price": "7499", "stock": 15},
-            {"name": "Monitor Arm Mount", "sku": "MOUNT-001", "price": "3499", "stock": 12},
-            {"name": "HDMI Cable 2m", "sku": "HDMI-001", "price": "799", "stock": 60},
-            {"name": "Desk Lamp LED", "sku": "LAMP-001", "price": "1899", "stock": 5},
-            {"name": "Laptop Stand", "sku": "LSTAND-001", "price": "2999", "stock": 22},
-            {"name": "Document Camera", "sku": "DOC-001", "price": "8999", "stock": 0},
-            {"name": "Web Camera HD", "sku": "CAM-001", "price": "3999", "stock": 18},
-            {"name": "Desk Organizer", "sku": "ORG-001", "price": "899", "stock": 40},
-            {"name": "Noise Cancelling Earbuds", "sku": "EAR-001", "price": "5999", "stock": 33},
+            {"name": "Premium Wireless Headphones", "sku": "WH-001", "price": 4999, "stock": 25},
+            {"name": "USB-C Charging Cable", "sku": "USB-001", "price": 599, "stock": 100},
+            {"name": "Phone Stand", "sku": "STAND-001", "price": 1299, "stock": 8},
+            {"name": "Screen Protector", "sku": "SCREEN-001", "price": 399, "stock": 3},
+            {"name": "Portable Power Bank", "sku": "PB-001", "price": 2499, "stock": 0},
+            {"name": "Wireless Mouse", "sku": "MOUSE-001", "price": 2199, "stock": 45},
+            {"name": "Mechanical Keyboard", "sku": "KB-001", "price": 7499, "stock": 15},
+            {"name": "Monitor Arm Mount", "sku": "MOUNT-001", "price": 3499, "stock": 12},
+            {"name": "HDMI Cable 2m", "sku": "HDMI-001", "price": 799, "stock": 60},
+            {"name": "Desk Lamp LED", "sku": "LAMP-001", "price": 1899, "stock": 5},
+            {"name": "Laptop Stand", "sku": "LSTAND-001", "price": 2999, "stock": 22},
+            {"name": "Document Camera", "sku": "DOC-001", "price": 8999, "stock": 0},
+            {"name": "Web Camera HD", "sku": "CAM-001", "price": 3999, "stock": 18},
+            {"name": "Desk Organizer", "sku": "ORG-001", "price": 899, "stock": 40},
+            {"name": "Noise Cancelling Earbuds", "sku": "EAR-001", "price": 5999, "stock": 33},
         ]
 
         result = []
@@ -100,7 +100,7 @@ class DemoConnector(BaseMerchantConnector):
                 "id": 1000 + idx,
                 "number": str(1000 + idx),
                 "status": status,
-                "total": str(total),
+                "total": total,
                 "currency": "INR",
                 "payment_method": random.choice(["credit_card", "upi", "bank_transfer"]),
                 "date_created": order_date.isoformat(),
@@ -120,7 +120,7 @@ class DemoConnector(BaseMerchantConnector):
                         "product_id": random.randint(1, 15),
                         "name": random.choice([p["name"] for p in self.products_data]),
                         "quantity": random.randint(1, 3),
-                        "price": str(random.randint(500, 10000)),
+                        "price": random.randint(500, 10000),
                     }
                 ],
             })
