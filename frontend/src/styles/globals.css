@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  @apply border-border;
+}
+
+html {
+  @apply scroll-smooth;
+}
+
+body {
+  @apply bg-white text-primary font-sans;
+}
+
+input, textarea, select {
+  @apply bg-surface border border-border rounded-md px-3 py-2 text-primary placeholder-secondary focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-0;
+}
+
+button {
+  @apply transition-colors duration-200;
+}
+
+a {
+  @apply text-accent hover:text-red-600 transition-colors;
+}
+
+.container {
+  @apply max-w-7xl mx-auto px-4;
+}
+
+.card {
+  @apply bg-white border border-border rounded-lg p-4 shadow-sm;
+}
+
+.badge {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-sm font-medium;
+}
+
+.button {
+  @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors;
+}
+
+.button-primary {
+  @apply bg-accent text-white hover:bg-red-600;
+}
+
+.button-secondary {
+  @apply bg-surface text-primary border border-border hover:bg-gray-100;
+}
+
+.button-ghost {
+  @apply text-primary hover:bg-surface;
+}
+
+.text-muted {
+  @apply text-secondary;
+}
+
+.text-label {
+  @apply text-sm font-medium text-secondary uppercase tracking-wider;
+}
+
+.skeleton {
+  @apply animate-pulse bg-surface rounded-md;
+}
+
+.divider {
+  @apply border-t border-border;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s ease-in-out;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-surface;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full hover:bg-secondary;
+}
