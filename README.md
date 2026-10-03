@@ -1,5 +1,7 @@
 # Razorpay Merchant Agent
 
+For connecting WooCommerce, press Disconnect and then connect.
+
 Premium merchant operations workspace that connects to WooCommerce and provides a modern interface for managing orders, products, inventory, and customers.
 
 ## Features
