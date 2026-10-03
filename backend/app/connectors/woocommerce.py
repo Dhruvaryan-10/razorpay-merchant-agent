@@ -13,7 +13,7 @@ class WooCommerceConnector(BaseMerchantConnector):
     ):
         self.store_url = store_url.rstrip("/")
         self.consumer_key = consumer_key
-        self.consumer_secret = consumer_secret
+        self._consumer_secret = consumer_secret  # Private attribute for security
         self.base_url = f"{self.store_url}/wp-json/wc/v3"
         self.timeout = settings.woocommerce_request_timeout
         self.max_retries = settings.max_retries
@@ -28,7 +28,7 @@ class WooCommerceConnector(BaseMerchantConnector):
         """Make authenticated request to WooCommerce API with retry logic"""
         url = f"{self.base_url}{endpoint}"
 
-        auth = (self.consumer_key, self.consumer_secret)
+        auth = (self.consumer_key, self._consumer_secret)
 
         for attempt in range(self.max_retries):
             try:

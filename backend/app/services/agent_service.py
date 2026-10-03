@@ -11,6 +11,17 @@ class AgentService:
     """Service for agent query processing and tool execution"""
 
     SUPPORTED_INTENTS = {
+        # More specific intents must come before general ones
+        "high_value_pending_orders": {
+            "patterns": [
+                r"pending\s+orders?\s+above\s+[\$₹]?\s*(\d+)",
+                r"find.*pending.*orders?.*[\$₹]?\s*(\d+)",
+                r"orders?\s+above\s+[\$₹]?\s*(\d+).*pending",
+                r"[\$₹]?\s*(\d+).*pending\s+orders?",
+            ],
+            "tool": "search_orders_filtered",
+            "params_pattern": True,
+        },
         "pending_orders": {
             "patterns": [
                 r"pending\s+orders",
@@ -19,15 +30,6 @@ class AgentService:
             ],
             "tool": "search_orders",
             "params": {"status": "pending"},
-        },
-        "high_value_pending_orders": {
-            "patterns": [
-                r"pending\s+orders?\s+above\s+[₹\$]?(\d+)",
-                r"find.*pending.*orders?.*[₹\$]?(\d+)",
-                r"orders?\s+above\s+[₹\$]?(\d+).*pending",
-            ],
-            "tool": "search_orders_filtered",
-            "params_pattern": True,
         },
         "low_stock_products": {
             "patterns": [
