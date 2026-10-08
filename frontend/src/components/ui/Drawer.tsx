@@ -54,8 +54,19 @@ export function Drawer({
                 transition={{ duration: duration.quick }}
               />
             </Dialog.Overlay>
-            <Dialog.Content asChild forceMount aria-describedby={undefined}>
+            <Dialog.Content
+              asChild
+              forceMount
+              aria-describedby={undefined}
+              // Focus the panel itself rather than its first control (the
+              // "previous" button); Tab still moves through every control.
+              onOpenAutoFocus={(event) => {
+                event.preventDefault();
+                (event.currentTarget as HTMLElement | null)?.focus();
+              }}
+            >
               <motion.aside
+                tabIndex={-1}
                 className="fixed inset-0 z-50 flex flex-col bg-sheet shadow-e1 focus:outline-none md:inset-y-0 md:left-auto md:right-0 md:w-[480px] lg:w-drawer"
                 initial={{ opacity: 0, ...offset }}
                 animate={{ opacity: 1, x: 0, y: 0 }}

@@ -8,7 +8,15 @@ import { orderStatus } from '@/lib/status';
 import { cn } from '@/lib/cn';
 import type { Order } from '@/types';
 
-export function LatestOrders({ orders, onOpen }: { orders: Order[]; onOpen: (order: Order) => void }) {
+export function LatestOrders({
+  orders,
+  onOpen,
+  selectedId,
+}: {
+  orders: Order[];
+  onOpen: (order: Order) => void;
+  selectedId?: string | null;
+}) {
   const columns: Column<Order>[] = [
     {
       key: 'order',
@@ -55,6 +63,7 @@ export function LatestOrders({ orders, onOpen }: { orders: Order[]; onOpen: (ord
         rows={orders}
         getRowId={(o) => o.id}
         onOpen={onOpen}
+        selectedId={selectedId}
         rowMuted={(o) => !!orderStatus(o.status).recedes}
         empty={<p className="py-6 text-cell text-ink-3">No orders yet.</p>}
         mobileRow={(o) => {

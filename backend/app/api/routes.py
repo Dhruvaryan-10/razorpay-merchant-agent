@@ -8,7 +8,7 @@ from app.schemas import AgentQuery, ConnectionCreate
 from app.services import StoreService, ConnectorService, AgentService
 from app.services.metrics_service import build_dashboard, fetch_all, format_inr, DEFAULT_PERIOD
 from app.services.normalize import normalize_customer, normalize_order, normalize_product
-from app.services.stock import LOW_STOCK_THRESHOLD, classify_stock
+from app.services.stock import LOW_STOCK_THRESHOLD, classify_stock, order_total
 from app.connectors import WooCommerceConnector
 
 router = APIRouter(prefix="/api", tags=["merchant"])
@@ -241,15 +241,32 @@ async def list_orders(
     status: Optional[str] = None,
     search: Optional[str] = None,
     customer_id: Optional[int] = None,
+    min_total: Optional[float] = Query(None, ge=0),
     db: Session = Depends(get_db),
 ):
-    """List orders"""
+    """List orders.
+
+    min_total keeps orders worth at least that amount. WooCommerce can't
+    filter by total, so matching orders are scanned and paginated here.
+    """
     try:
         store_id = _resolve_store_id(db, store_id)
         if not store_id:
             return {"error": "No store connected"}
 
         connector = ConnectorService.get_connector(db, store_id)
+
+        if min_total is not None:
+            orders, _ = await fetch_all(
+                connector.list_orders, "orders", status=status, search=search, customer_id=customer_id
+            )
+            matching = [o for o in orders if order_total(o) >= min_total]
+            start = (page - 1) * per_page
+            return {
+                "orders": [normalize_order(o) for o in matching[start:start + per_page]],
+                **_page(len(matching), page, per_page),
+            }
+
         response = await connector.list_orders(
             page=page, per_page=per_page, status=status, search=search, customer_id=customer_id
         )

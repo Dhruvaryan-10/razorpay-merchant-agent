@@ -83,6 +83,8 @@ export interface OrderQuery {
   status?: string;
   search?: string;
   customer_id?: number;
+  /** Orders worth at least this amount. */
+  min_total?: number;
 }
 
 export interface ProductQuery {

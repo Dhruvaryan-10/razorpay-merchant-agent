@@ -1,8 +1,13 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import { LegacyOrders } from '@/components/legacy/LegacyRoutes';
+import { OrdersView } from '@/components/orders/OrdersView';
 
 export const metadata: Metadata = { title: 'Orders' };
 
 export default function Page() {
-  return <LegacyOrders />;
+  return (
+    <Suspense>
+      <OrdersView />
+    </Suspense>
+  );
 }

@@ -126,3 +126,23 @@ class TestConnectSecretHandling:
             "/api/stores/connect?store_url=https://x.test&consumer_key=ck&consumer_secret=cs"
         )
         assert response.status_code == 422
+
+
+class TestOrderAmountFilter:
+    def test_min_total_filters_and_paginates(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        client = TestClient(app)
+        store_id = client.post("/api/stores/demo").json()["store_id"]
+        try:
+            everything = client.get("/api/orders", params={"store_id": store_id, "per_page": 100}).json()
+            expected = [o for o in everything["orders"] if o["total"] >= 5000]
+            page = client.get(
+                "/api/orders", params={"store_id": store_id, "min_total": 5000, "per_page": 5}
+            ).json()
+            assert page["total"] == len(expected)
+            assert all(o["total"] >= 5000 for o in page["orders"])
+            assert len(page["orders"]) == min(5, len(expected))
+        finally:
+            client.delete(f"/api/stores/{store_id}")

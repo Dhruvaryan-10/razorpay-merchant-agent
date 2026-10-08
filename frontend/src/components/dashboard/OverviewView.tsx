@@ -1,11 +1,12 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { PageBody, PageHeader } from '@/components/shell/PageHeader';
 import { ErrorNotice } from '@/components/ui/EmptyState';
 import { Segmented } from '@/components/ui/Segmented';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useDashboard } from '@/hooks/queries';
+import { useRecordParam } from '@/hooks/useRecordParam';
+import { OrderDrawer } from '@/components/orders/OrderDrawer';
 import { useUrlState } from '@/hooks/useUrlState';
 import { PERIODS, parsePeriod } from '@/lib/dashboard';
 import { formatToday } from '@/lib/format';
@@ -42,7 +43,7 @@ function OverviewSkeleton() {
 }
 
 export function OverviewView() {
-  const router = useRouter();
+  const orderDrawer = useRecordParam('order');
   const url = useUrlState();
   const period = parsePeriod(url.get('period'));
   const { data, isPending, isError, error, refetch, isPlaceholderData } = useDashboard(period);
@@ -94,13 +95,15 @@ export function OverviewView() {
             <div className="grid gap-12 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:gap-14">
               <LatestOrders
                 orders={data.recent_orders}
-                onOpen={(order) => router.push(`/app/orders?order=${order.external_id}`)}
+                onOpen={(order) => orderDrawer.open(order.external_id)}
+                selectedId={orderDrawer.id !== null ? String(orderDrawer.id) : null}
               />
               <AskField />
             </div>
           </div>
         ) : null}
       </PageBody>
+      <OrderDrawer siblings={data?.recent_orders} />
     </>
   );
 }
