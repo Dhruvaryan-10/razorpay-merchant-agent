@@ -119,7 +119,7 @@ export function AppShell({
         Skip to content
       </a>
       <div className="min-h-screen bg-canvas lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-line lg:block">
+        <aside className="hidden border-r border-line bg-rail lg:block">
           <div className="sticky top-0 h-screen">
             <Sidebar />
           </div>

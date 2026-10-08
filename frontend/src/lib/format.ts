@@ -28,6 +28,11 @@ export function formatMoney(amount: number | null | undefined, currency = 'INR')
   return moneyFormatter(currency, hasPaise ? 2 : 0).format(value);
 }
 
+/** Whole rupees, for headline figures and averages. */
+export function formatMoneyWhole(amount: number, currency = 'INR') {
+  return formatMoney(Math.round(amount), currency);
+}
+
 /** ₹4.8L, ₹1.2Cr, ₹48.2K: for chart labels and other tight spaces. */
 export function formatMoneyCompact(amount: number, currency = 'INR') {
   const symbol = currency === 'INR' ? '₹' : '';
