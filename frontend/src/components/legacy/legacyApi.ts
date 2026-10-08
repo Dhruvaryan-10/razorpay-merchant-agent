@@ -5,10 +5,6 @@ import { api } from '@/lib/api';
 type ListParams = { store_id?: string; page?: number; per_page?: number; status?: string; stock_status?: string; search?: string };
 
 export const legacyApi = {
-  createDemoStore: api.createDemoStore,
-  connectWooCommerce: api.connectWooCommerce,
-  listStores: () => api.listStores().then((stores) => ({ stores })),
-  deleteStore: api.deleteStore,
   getDashboard: (storeId: string) => api.getDashboard(storeId, '30d'),
   listOrders: ({ store_id, ...params }: ListParams) =>
     api.listOrders(store_id as string, params).then((p) => ({ ...p, orders: p.items })),
