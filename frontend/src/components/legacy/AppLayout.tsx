@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Store, Order, Product, Customer, Dashboard as DashboardType, InventoryStatus, AgentResponse } from '@/types';
-import { api } from '@/lib/api';
+import { legacyApi as api } from './legacyApi';
 import { formatCurrency, formatDate, getStatusBadgeColor, getStatusText } from '@/lib/utils';
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Zap, Settings,
@@ -260,11 +260,11 @@ function OrdersPage({ store }: any) {
               <p className="text-primary">{selectedOrder.payment_method || 'N/A'}</p>
             </div>
           </div>
-          {selectedOrder.line_items && selectedOrder.line_items.length > 0 && (
+          {(selectedOrder as any).line_items && (selectedOrder as any).line_items.length > 0 && (
             <div className="border-t border-border pt-4">
               <p className="text-label mb-2">Items</p>
               <div className="space-y-2">
-                {selectedOrder.line_items.map((item: any, idx: number) => (
+                {(selectedOrder as any).line_items.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-center p-2 bg-surface rounded">
                     <div>
                       <p className="font-medium text-primary">{item.name}</p>
@@ -277,7 +277,7 @@ function OrdersPage({ store }: any) {
             </div>
           )}
           <div className="text-sm text-secondary">
-            <p>Created: {formatDate(selectedOrder.created_at)}</p>
+            <p>Created: {formatDate(selectedOrder.created_at ?? '')}</p>
           </div>
         </div>
       </div>
@@ -451,7 +451,7 @@ function ProductsPage({ store }: any) {
             </div>
           )}
           <div className="text-sm text-secondary">
-            <p>Created: {formatDate(selectedProduct.created_at)}</p>
+            <p>Created: {formatDate(selectedProduct.created_at ?? '')}</p>
           </div>
         </div>
       </div>
@@ -736,7 +736,7 @@ function CustomersPage({ store }: any) {
             </div>
           )}
           <div className="text-sm text-secondary">
-            <p>Member since: {formatDate(selectedCustomer.created_at)}</p>
+            <p>Member since: {formatDate(selectedCustomer.created_at ?? '')}</p>
           </div>
         </div>
       </div>

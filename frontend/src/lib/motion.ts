@@ -11,10 +11,12 @@ export const duration = {
   reduced: 0.08,
 } as const;
 
-export const ease = {
+type Bezier = [number, number, number, number];
+
+export const ease: { out: Bezier; inOut: Bezier } = {
   out: [0.2, 0.8, 0.2, 1],
   inOut: [0.4, 0, 0.2, 1],
-} as const;
+};
 
 /** Page content: fades in with a 4px rise; the shell never animates. */
 export const pageEnter = {

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
+import { legacyApi as api } from '@/components/legacy/legacyApi';
 import { Store } from '@/types';
-import ConnectionScreen from '@/components/ConnectionScreen';
-import AppLayout from '@/components/AppLayout';
+import ConnectionScreen from '@/components/legacy/ConnectionScreen';
+import AppLayout from '@/components/legacy/AppLayout';
 
 const STORE_KEY = 'rma.store';
 

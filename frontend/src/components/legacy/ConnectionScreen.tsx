@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { api } from '@/lib/api';
+import { legacyApi as api } from './legacyApi';
 import { Store } from '@/types';
 import {  AlertCircle, CheckCircle, Loader } from 'lucide-react';
 
