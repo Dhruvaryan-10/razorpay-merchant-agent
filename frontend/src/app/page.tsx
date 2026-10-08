@@ -77,15 +77,21 @@ export default function Home() {
   }
 
   if (!store) {
-    return <ConnectionScreen onStoreConnect={handleStoreConnect} />;
+    return (
+      <div className="legacy">
+        <ConnectionScreen onStoreConnect={handleStoreConnect} />
+      </div>
+    );
   }
 
   return (
+    <div className="legacy">
     <AppLayout
       store={store}
       currentPage={currentPage}
       onPageChange={setCurrentPage}
       onDisconnect={handleDisconnect}
     />
+    </div>
   );
 }

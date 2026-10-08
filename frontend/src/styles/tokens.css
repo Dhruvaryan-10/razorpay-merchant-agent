@@ -1,0 +1,141 @@
+/*
+ * Ledger design tokens.
+ *
+ * Colours are stored as RGB channels so Tailwind can apply opacity
+ * (bg-ink/10). Components never use raw hex or Tailwind palette classes;
+ * they use these names through tailwind.config.js.
+ *
+ * Dark mode is tuned separately rather than inverted: surfaces get lighter as
+ * they rise, the accent lifts in lightness, status tints become 14% fills.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --canvas: 246 245 241;        /* page ground, warm paper */
+  --rail: 241 239 234;          /* sidebar */
+  --sheet: 253 252 250;         /* drawer, palette, popovers, focused inputs */
+  --well: 239 237 231;          /* inputs, table header, row hover */
+  --line: 226 222 213;          /* section rules, row dividers */
+  --line-strong: 211 207 196;   /* input edges, header rule */
+  --mute: 207 203 192;          /* neutral chart fill */
+
+  /* Ink */
+  --ink: 21 23 28;              /* primary text, figures, primary button */
+  --ink-2: 74 79 90;            /* secondary text, 8.1:1 on canvas */
+  --ink-3: 103 108 120;         /* meta and captions, 4.9:1 on canvas */
+  --ink-4: 154 158 168;         /* decorative only: cancelled dash, disabled */
+  --on-ink: 246 245 241;        /* text on an ink fill */
+
+  /* Interaction */
+  --accent: 43 71 201;          /* links, focus, selection, chart line */
+  --accent-strong: 30 51 153;   /* accent hover and pressed */
+  --accent-tint: 233 236 248;   /* selected row, active filter */
+
+  /* Status */
+  --positive: 46 118 80;
+  --positive-tint: 227 239 231;
+  --caution: 168 100 0;         /* text-safe amber */
+  --caution-tint: 246 234 211;
+  --critical: 192 57 43;
+  --critical-tint: 247 226 223;
+
+  /* Elevation: only things above the page cast a shadow */
+  --shadow-e1: 0 1px 2px rgb(21 23 28 / 0.06), 0 4px 12px rgb(21 23 28 / 0.08), 0 0 0 1px rgb(21 23 28 / 0.06);
+  --shadow-e2: 0 2px 4px rgb(21 23 28 / 0.04), 0 16px 40px rgb(21 23 28 / 0.16), 0 0 0 1px rgb(21 23 28 / 0.06);
+  --shadow-raise: 0 1px 2px rgb(21 23 28 / 0.08), 0 0 0 1px rgb(21 23 28 / 0.06);
+  --scrim: 21 23 28;
+  --scrim-opacity: 0.24;
+
+  /* Motion */
+  --dur-instant: 100ms;
+  --dur-quick: 160ms;
+  --dur-move: 240ms;
+  --dur-data: 480ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark values: an explicit choice here, the system preference below. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --canvas: 14 16 20;           /* blue-black, warmer than OLED black */
+  --rail: 11 13 16;
+  --sheet: 23 26 32;            /* lighter than canvas: elevation by lightness */
+  --well: 10 12 15;             /* sinks below canvas */
+  --line: 34 38 46;             /* lower contrast; dark lines glare */
+  --line-strong: 48 53 63;
+  --mute: 58 63 74;
+
+  --ink: 236 237 239;           /* off-white, avoids halation */
+  --ink-2: 167 173 184;
+  --ink-3: 128 134 143;
+  --ink-4: 93 99 109;
+  --on-ink: 14 16 20;
+
+  --accent: 129 151 255;        /* lifted to keep 6:1 */
+  --accent-strong: 163 180 255;
+  --accent-tint: 27 34 64;
+
+  --positive: 93 190 138;
+  --positive-tint: 21 40 30;
+  --caution: 226 165 65;
+  --caution-tint: 44 35 18;
+  --critical: 238 122 110;
+  --critical-tint: 51 25 23;
+
+  /* Shadows don't read on dark: a lighter surface, a line and a top highlight */
+  --shadow-e1: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 0 0 1px rgb(48 53 63), 0 8px 24px rgb(0 0 0 / 0.4);
+  --shadow-e2: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 0 0 1px rgb(48 53 63), 0 24px 64px rgb(0 0 0 / 0.55);
+  --shadow-raise: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 0 0 1px rgb(48 53 63);
+  --scrim: 0 0 0;
+  --scrim-opacity: 0.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --canvas: 14 16 20;
+    --rail: 11 13 16;
+    --sheet: 23 26 32;
+    --well: 10 12 15;
+    --line: 34 38 46;
+    --line-strong: 48 53 63;
+    --mute: 58 63 74;
+
+    --ink: 236 237 239;
+    --ink-2: 167 173 184;
+    --ink-3: 128 134 143;
+    --ink-4: 93 99 109;
+    --on-ink: 14 16 20;
+
+    --accent: 129 151 255;
+    --accent-strong: 163 180 255;
+    --accent-tint: 27 34 64;
+
+    --positive: 93 190 138;
+    --positive-tint: 21 40 30;
+    --caution: 226 165 65;
+    --caution-tint: 44 35 18;
+    --critical: 238 122 110;
+    --critical-tint: 51 25 23;
+
+    --shadow-e1: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 0 0 1px rgb(48 53 63), 0 8px 24px rgb(0 0 0 / 0.4);
+    --shadow-e2: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 0 0 1px rgb(48 53 63), 0 24px 64px rgb(0 0 0 / 0.55);
+    --shadow-raise: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 0 0 1px rgb(48 53 63);
+    --scrim: 0 0 0;
+    --scrim-opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 80ms;
+    --dur-quick: 80ms;
+    --dur-move: 80ms;
+    --dur-data: 0ms;
+  }
+}
