@@ -17,6 +17,7 @@ class BaseMerchantConnector(ABC):
         per_page: int = 20,
         status: Optional[str] = None,
         search: Optional[str] = None,
+        customer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """List orders with pagination and filters"""
         pass

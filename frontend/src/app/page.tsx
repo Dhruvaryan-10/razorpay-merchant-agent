@@ -6,6 +6,25 @@ import { Store } from '@/types';
 import ConnectionScreen from '@/components/ConnectionScreen';
 import AppLayout from '@/components/AppLayout';
 
+const STORE_KEY = 'rma.store';
+
+function rememberStore(id: string | null) {
+  try {
+    if (id) localStorage.setItem(STORE_KEY, id);
+    else localStorage.removeItem(STORE_KEY);
+  } catch {
+    // Storage can be unavailable (private mode); the session still works.
+  }
+}
+
+function rememberedStore(): string | null {
+  try {
+    return localStorage.getItem(STORE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
@@ -14,10 +33,9 @@ export default function Home() {
   useEffect(() => {
     const loadStore = async () => {
       try {
-        const stores = await api.listStores();
-        if (stores.stores && stores.stores.length > 0) {
-          setStore(stores.stores[0]);
-        }
+        const { stores } = await api.listStores();
+        const savedId = rememberedStore();
+        setStore(stores.find((s) => s.id === savedId) ?? stores[0] ?? null);
       } catch (error) {
         console.error('Error loading store:', error);
       } finally {
@@ -29,11 +47,20 @@ export default function Home() {
   }, []);
 
   const handleStoreConnect = (newStore: Store) => {
+    rememberStore(newStore.id);
     setStore(newStore);
     setCurrentPage('overview');
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    if (store) {
+      try {
+        await api.deleteStore(store.id);
+      } catch (error) {
+        console.error('Error disconnecting store:', error);
+      }
+    }
+    rememberStore(null);
     setStore(null);
     setCurrentPage('overview');
   };

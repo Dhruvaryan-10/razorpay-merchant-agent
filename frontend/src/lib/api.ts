@@ -9,11 +9,11 @@ export async function apiCall<T>(
   const url = `${API_URL}${endpoint}`;
 
   const response = await fetch(url, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
-    ...options,
   });
 
   if (!response.ok) {
@@ -24,22 +24,35 @@ export async function apiCall<T>(
   return response.json();
 }
 
+function withQuery(path: string, params: Record<string, string | number | undefined | null>) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      query.append(key, String(value));
+    }
+  });
+  const qs = query.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+// Create endpoints return { store_id, ... }; resolve the full store record so
+// every later call is scoped to this store rather than the backend's default.
+async function resolveCreatedStore(created: Promise<{ store_id: string }>) {
+  const { store_id } = await created;
+  return apiCall<Store>(`/api/stores/${store_id}`);
+}
+
 export const api = {
   // Stores
   createDemoStore: () =>
-    apiCall<Store>('/api/stores/demo', { method: 'POST' }),
+    resolveCreatedStore(apiCall<{ store_id: string }>('/api/stores/demo', { method: 'POST' })),
 
+  // Credentials travel in the JSON body only, never in the URL.
   connectWooCommerce: (store_url: string, consumer_key: string, consumer_secret: string) =>
-    apiCall<Store>('/api/stores/connect', {
-      method: 'POST',
-      body: JSON.stringify({}),
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    }).catch(() =>
-      // Fallback to query params
-      apiCall<Store>(`/api/stores/connect?store_url=${encodeURIComponent(store_url)}&consumer_key=${encodeURIComponent(consumer_key)}&consumer_secret=${encodeURIComponent(consumer_secret)}`, {
+    resolveCreatedStore(
+      apiCall<{ store_id: string }>('/api/stores/connect', {
         method: 'POST',
+        body: JSON.stringify({ store_url, consumer_key, consumer_secret }),
       })
     ),
 
@@ -54,7 +67,7 @@ export const api = {
 
   // Dashboard
   getDashboard: (storeId?: string) =>
-    apiCall<any>(`/api/dashboard${storeId ? `?store_id=${storeId}` : ''}`),
+    apiCall<any>(withQuery('/api/dashboard', { store_id: storeId })),
 
   // Orders
   listOrders: (params: {
@@ -63,18 +76,10 @@ export const api = {
     per_page?: number;
     status?: string;
     search?: string;
-  }) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        query.append(key, String(value));
-      }
-    });
-    return apiCall<any>(`/api/orders?${query.toString()}`);
-  },
+  }) => apiCall<any>(withQuery('/api/orders', params)),
 
   getOrder: (orderId: number, storeId?: string) =>
-    apiCall<any>(`/api/orders/${orderId}${storeId ? `?store_id=${storeId}` : ''}`),
+    apiCall<any>(withQuery(`/api/orders/${orderId}`, { store_id: storeId })),
 
   // Products
   listProducts: (params: {
@@ -83,22 +88,14 @@ export const api = {
     per_page?: number;
     stock_status?: string;
     search?: string;
-  }) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        query.append(key, String(value));
-      }
-    });
-    return apiCall<any>(`/api/products?${query.toString()}`);
-  },
+  }) => apiCall<any>(withQuery('/api/products', params)),
 
   getProduct: (productId: number, storeId?: string) =>
-    apiCall<any>(`/api/products/${productId}${storeId ? `?store_id=${storeId}` : ''}`),
+    apiCall<any>(withQuery(`/api/products/${productId}`, { store_id: storeId })),
 
   // Inventory
   getInventory: (storeId?: string) =>
-    apiCall<any>(`/api/inventory${storeId ? `?store_id=${storeId}` : ''}`),
+    apiCall<any>(withQuery('/api/inventory', { store_id: storeId })),
 
   // Customers
   listCustomers: (params: {
@@ -106,26 +103,18 @@ export const api = {
     page?: number;
     per_page?: number;
     search?: string;
-  }) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        query.append(key, String(value));
-      }
-    });
-    return apiCall<any>(`/api/customers?${query.toString()}`);
-  },
+  }) => apiCall<any>(withQuery('/api/customers', params)),
 
   getCustomer: (customerId: number, storeId?: string) =>
-    apiCall<any>(`/api/customers/${customerId}${storeId ? `?store_id=${storeId}` : ''}`),
+    apiCall<any>(withQuery(`/api/customers/${customerId}`, { store_id: storeId })),
 
-  // Agent
+  // Agent: store_id is sent with the request so the query runs against this store.
   agentQuery: (query: string, storeId?: string) =>
-    apiCall<any>('/api/agent/query', {
+    apiCall<any>(withQuery('/api/agent/query', { store_id: storeId }), {
       method: 'POST',
       body: JSON.stringify({ query }),
-    }).then(res => storeId ? { ...res, store_id: storeId } : res),
+    }),
 
   getAgentExecutions: (storeId?: string, limit?: number) =>
-    apiCall<any>(`/api/agent/executions${storeId ? `?store_id=${storeId}${limit ? `&limit=${limit}` : ''}` : ''}`),
+    apiCall<any>(withQuery('/api/agent/executions', { store_id: storeId, limit })),
 };

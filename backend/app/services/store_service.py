@@ -4,6 +4,14 @@ from app.utils import encrypt_secret, decrypt_secret
 import uuid
 
 
+def as_uuid(value):
+    """Coerce an ID to uuid.UUID so lookups bind correctly on every database.
+
+    Raises ValueError for a malformed ID, which callers report as not found.
+    """
+    return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+
 class StoreService:
     """Service for managing merchants and stores"""
 
@@ -47,12 +55,13 @@ class StoreService:
         store_url: str,
         consumer_key: str,
         consumer_secret: str,
+        name: str = "WooCommerce Store",
     ) -> Store:
         """Create a live WooCommerce store connection"""
         store = Store(
             id=uuid.uuid4(),
             merchant_id=uuid.UUID(merchant_id) if isinstance(merchant_id, str) else merchant_id,
-            name="WooCommerce Store",
+            name=name,
             store_url=store_url,
             provider="woocommerce",
             mode="live",
@@ -76,17 +85,20 @@ class StoreService:
     @staticmethod
     def get_store(db: Session, store_id: str) -> Store:
         """Get a store by ID"""
-        return db.query(Store).filter(Store.id == store_id).first()
+        try:
+            return db.query(Store).filter(Store.id == as_uuid(store_id)).first()
+        except ValueError:
+            return None
 
     @staticmethod
     def get_stores(db: Session, merchant_id: str) -> list:
         """Get all stores for a merchant"""
-        return db.query(Store).filter(Store.merchant_id == merchant_id).all()
+        return db.query(Store).filter(Store.merchant_id == as_uuid(merchant_id)).order_by(Store.created_at).all()
 
     @staticmethod
     def delete_store(db: Session, store_id: str) -> bool:
         """Delete a store"""
-        store = db.query(Store).filter(Store.id == store_id).first()
+        store = StoreService.get_store(db, store_id)
         if store:
             db.delete(store)
             db.commit()
@@ -97,7 +109,7 @@ class StoreService:
     def get_connection(db: Session, store_id: str) -> WooCommerceConnection:
         """Get WooCommerce connection for a store"""
         return db.query(WooCommerceConnection).filter(
-            WooCommerceConnection.store_id == store_id
+            WooCommerceConnection.store_id == as_uuid(store_id)
         ).first()
 
     @staticmethod

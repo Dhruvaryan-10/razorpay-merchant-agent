@@ -1,14 +1,15 @@
+// ₹48,210 / ₹3,84,210: Indian digit grouping, paise only when present.
 export const formatCurrency = (amount: number | string, currency: string = 'INR') => {
-  const symbols: Record<string, string> = {
-    INR: '₹',
-    USD: '$',
-    EUR: '€',
-  };
-
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
   const safeAmount = isNaN(numAmount) ? 0 : numAmount;
+  const hasPaise = Math.round(safeAmount * 100) % 100 !== 0;
 
-  return `${symbols[currency] || currency} ${safeAmount.toFixed(2)}`;
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: hasPaise ? 2 : 0,
+    maximumFractionDigits: hasPaise ? 2 : 0,
+  }).format(safeAmount);
 };
 
 export const formatDate = (dateString: string) => {

@@ -62,3 +62,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 .venv/
+
+# TypeScript incremental build info
+*.tsbuildinfo
