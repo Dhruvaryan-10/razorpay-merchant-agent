@@ -1,103 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Store, Order, Product, Customer, Dashboard as DashboardType, InventoryStatus, AgentResponse } from '@/types';
+import { Order, Product, Customer, Dashboard as DashboardType, InventoryStatus, AgentResponse } from '@/types';
 import { legacyApi as api } from './legacyApi';
 import { formatCurrency, formatDate, getStatusBadgeColor, getStatusText } from '@/lib/utils';
 import {
-  LayoutDashboard, Package, ShoppingCart, Users, Zap, Settings,
-  Menu, X, Search, ChevronRight, AlertCircle, Loader, Eye,
-  ChevronLeft
+  Package, ShoppingCart, Users, Search, ChevronRight, Loader, Eye, ChevronLeft
 } from 'lucide-react';
 
-interface AppLayoutProps {
-  store: Store;
-  currentPage: string;
-  onPageChange: (page: string) => void;
-  onDisconnect: () => void;
-}
-
-// Sidebar component
-function Sidebar({ currentPage, onPageChange, store, onDisconnect }: any) {
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  const menuItems = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'orders', label: 'Orders', icon: ShoppingCart },
-    { id: 'products', label: 'Products', icon: Package },
-    { id: 'inventory', label: 'Inventory', icon: AlertCircle },
-    { id: 'customers', label: 'Customers', icon: Users },
-    { id: 'agent', label: 'Agent', icon: Zap },
-    { id: 'settings', label: 'Settings', icon: Settings },
-  ];
-
-  const handleNavClick = (pageId: string) => {
-    onPageChange(pageId);
-    setMobileOpen(false);
-  };
-
-  return (
-    <>
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white border border-border rounded-lg hover:bg-surface"
-      >
-        {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </button>
-
-      <aside className={`fixed md:relative inset-0 md:inset-auto w-64 bg-primary text-white flex flex-col transition-transform ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} z-40 md:z-0`}>
-        <div className="p-6 border-b border-gray-700">
-          <h1 className="text-xl font-bold">Razorpay</h1>
-          <p className="text-xs text-gray-400">Merchant Agent</p>
-        </div>
-
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {menuItems.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => handleNavClick(id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                currentPage === id
-                  ? 'bg-accent text-white'
-                  : 'text-gray-300 hover:bg-gray-800'
-              }`}
-            >
-              <Icon className="w-5 h-5" />
-              <span className="text-sm font-medium">{label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t border-gray-700">
-          <div className="mb-4 p-3 bg-gray-800 rounded-lg">
-            <p className="text-xs text-gray-400 mb-1">Store</p>
-            <p className="text-sm font-semibold truncate">{store.name}</p>
-            <div className="mt-2 flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-success rounded-full" />
-              <span className="text-xs text-gray-400">{getStatusText(store.mode)}</span>
-            </div>
-          </div>
-          <button
-            onClick={onDisconnect}
-            className="w-full px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
-          >
-            Disconnect
-          </button>
-        </div>
-      </aside>
-
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 md:hidden z-30"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-    </>
-  );
-}
 
 // Dashboard page
-function OverviewPage({ store }: any) {
+export function OverviewPage({ store }: any) {
   const [dashboard, setDashboard] = useState<DashboardType | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -194,7 +107,7 @@ function OverviewPage({ store }: any) {
 }
 
 // Orders page
-function OrdersPage({ store }: any) {
+export function OrdersPage({ store }: any) {
   const [orders, setOrders] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -386,7 +299,7 @@ function OrdersPage({ store }: any) {
 }
 
 // Products page
-function ProductsPage({ store }: any) {
+export function ProductsPage({ store }: any) {
   const [products, setProducts] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -563,7 +476,7 @@ function ProductsPage({ store }: any) {
 }
 
 // Inventory page
-function InventoryPage({ store }: any) {
+export function InventoryPage({ store }: any) {
   const [inventory, setInventory] = useState<InventoryStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -676,7 +589,7 @@ function InventoryPage({ store }: any) {
 }
 
 // Customers page
-function CustomersPage({ store }: any) {
+export function CustomersPage({ store }: any) {
   const [customers, setCustomers] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -828,7 +741,7 @@ function CustomersPage({ store }: any) {
 }
 
 // Agent page
-function AgentPage({ store }: any) {
+export function AgentPage({ store }: any) {
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState<AgentResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -957,103 +870,3 @@ function AgentPage({ store }: any) {
   );
 }
 
-// Settings page
-function SettingsPage({ store, onDisconnect }: any) {
-  const [confirming, setConfirming] = useState(false);
-
-  return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-3xl font-bold text-primary">Settings</h1>
-        <p className="text-secondary mt-1">Manage your store connection</p>
-      </div>
-
-      <div className="card">
-        <h3 className="font-semibold text-primary mb-4">Store Information</h3>
-        <div className="space-y-3">
-          <div>
-            <p className="text-label">Store Name</p>
-            <p className="text-primary font-medium">{store.name}</p>
-          </div>
-          <div>
-            <p className="text-label">Mode</p>
-            <p className="text-primary font-medium">{getStatusText(store.mode)}</p>
-          </div>
-          {store.store_url && (
-            <div>
-              <p className="text-label">Store URL</p>
-              <p className="text-primary font-medium break-all">{store.store_url}</p>
-            </div>
-          )}
-          <div>
-            <p className="text-label">Status</p>
-            <div className="flex items-center gap-2">
-              <span className="inline-block w-2 h-2 bg-success rounded-full" />
-              <span className="text-primary font-medium">{getStatusText(store.status)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card border-red-200 bg-red-50">
-        <h3 className="font-semibold text-primary mb-4">Disconnect Store</h3>
-        <p className="text-sm text-secondary mb-4">
-          Disconnecting will remove all connection details. You can reconnect anytime.
-        </p>
-        {confirming ? (
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-primary">Are you sure you want to disconnect?</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  onDisconnect();
-                }}
-                className="button button-primary bg-red-600 hover:bg-red-700"
-              >
-                Confirm Disconnect
-              </button>
-              <button
-                onClick={() => setConfirming(false)}
-                className="button button-secondary"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setConfirming(true)}
-            className="button button-secondary border-red-200 text-red-600 hover:bg-red-100"
-          >
-            Disconnect
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default function AppLayout({ store, currentPage, onPageChange, onDisconnect }: AppLayoutProps) {
-  return (
-    <div className="flex h-screen bg-surface">
-      <Sidebar
-        currentPage={currentPage}
-        onPageChange={onPageChange}
-        store={store}
-        onDisconnect={onDisconnect}
-      />
-
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto p-4 md:p-8">
-          {currentPage === 'overview' && <OverviewPage store={store} />}
-          {currentPage === 'orders' && <OrdersPage store={store} />}
-          {currentPage === 'products' && <ProductsPage store={store} />}
-          {currentPage === 'inventory' && <InventoryPage store={store} />}
-          {currentPage === 'customers' && <CustomersPage store={store} />}
-          {currentPage === 'agent' && <AgentPage store={store} />}
-          {currentPage === 'settings' && <SettingsPage store={store} onDisconnect={onDisconnect} />}
-        </div>
-      </main>
-    </div>
-  );
-}
