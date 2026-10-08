@@ -6,12 +6,9 @@ import { useRouter } from 'next/navigation';
 import { inputClasses } from '@/components/ui/Input';
 import { Kbd } from '@/components/ui/Kbd';
 import { cn } from '@/lib/cn';
+import { agentHref } from '@/lib/intents';
 
 const SUGGESTIONS = ['Today’s sales', 'Out of stock items', 'Recent customers'];
-
-export function agentHref(query: string) {
-  return `/app/agent?q=${encodeURIComponent(query)}`;
-}
 
 /** Sends the question to the Agent, which runs it on arrival. */
 export function AskField() {

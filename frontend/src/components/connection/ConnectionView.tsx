@@ -95,12 +95,12 @@ export function ConnectionView() {
   return (
     <div className="flex min-h-screen flex-col bg-canvas md:grid md:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       {/* Visual: a compact band on phones, a full column from tablet up. Always dark. */}
-      <div className="relative h-44 shrink-0 overflow-hidden bg-[#0E1014] md:sticky md:top-0 md:h-screen">
+      <section aria-label="About Merchant Agent" className="relative h-44 shrink-0 overflow-hidden bg-[#0E1014] md:sticky md:top-0 md:h-screen">
         <LedgerFlow className="absolute inset-0 h-full w-full" />
         <p className="absolute bottom-8 left-6 right-6 hidden max-w-sm text-cell leading-5 text-[#A7ADB8] md:block">
           Every order, product and customer in your WooCommerce store, kept in one calm ledger.
         </p>
-      </div>
+      </section>
 
       <main className="flex flex-1 flex-col px-5 py-8 sm:px-10 md:py-10 lg:px-16 xl:px-24">
         <div className="flex items-center justify-between gap-4">

@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/cn';
+import { Glyph } from '@/components/ui/glyphs';
 import { useShell } from './ShellContext';
 
 /**
@@ -20,7 +21,7 @@ export function PageHeader({
   /** Secondary row, e.g. status tabs, sitting on the header rule. */
   children?: React.ReactNode;
 }) {
-  const { openNav } = useShell();
+  const { openNav, openPalette } = useShell();
   return (
     <header className="border-b border-line">
       <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-3 px-4 pb-4 pt-5 md:px-6 lg:px-8 xl:px-10', children && 'pb-3')}>
@@ -36,6 +37,14 @@ export function PageHeader({
           {meta ? <p className="text-meta text-ink-3">{meta}</p> : null}
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        <button
+          type="button"
+          onClick={() => openPalette()}
+          aria-label="Search or ask"
+          className="-mr-1 grid h-8 w-8 place-items-center rounded-sm text-ink-2 hover:bg-well hover:text-ink lg:hidden"
+        >
+          <Glyph name="search" size={15} />
+        </button>
       </div>
       {children ? <div className="px-4 md:px-6 lg:px-8 xl:px-10">{children}</div> : null}
     </header>

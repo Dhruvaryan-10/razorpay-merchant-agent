@@ -1,8 +1,13 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import { LegacyAgent } from '@/components/legacy/LegacyRoutes';
+import { AgentView } from '@/components/agent/AgentView';
 
 export const metadata: Metadata = { title: 'Agent' };
 
 export default function Page() {
-  return <LegacyAgent />;
+  return (
+    <Suspense>
+      <AgentView />
+    </Suspense>
+  );
 }

@@ -65,7 +65,7 @@ export function Drawer({
                 (event.currentTarget as HTMLElement | null)?.focus();
               }}
             >
-              <motion.aside
+              <motion.div
                 tabIndex={-1}
                 className="fixed inset-0 z-50 flex flex-col bg-sheet shadow-e1 focus:outline-none md:inset-y-0 md:left-auto md:right-0 md:w-[480px] lg:w-drawer"
                 initial={{ opacity: 0, ...offset }}
@@ -88,7 +88,7 @@ export function Drawer({
                 </header>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
                 {footer ? <footer className="shrink-0 border-t border-line px-5 py-3">{footer}</footer> : null}
-              </motion.aside>
+              </motion.div>
             </Dialog.Content>
           </Dialog.Portal>
         ) : null}

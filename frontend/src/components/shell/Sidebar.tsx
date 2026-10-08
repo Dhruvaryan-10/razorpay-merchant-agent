@@ -13,6 +13,10 @@ import { Mark } from '@/components/ui/StatusMark';
 import { NAV, SETTINGS_ITEM, isActive, type NavItem } from './nav';
 import { StoreMenu } from './StoreMenu';
 import { ThemeSwitcher } from './ThemeSwitcher';
+import { useShell } from './ShellContext';
+import { useModKey } from './CommandPalette';
+import { Glyph } from '@/components/ui/glyphs';
+import { Kbd } from '@/components/ui/Kbd';
 
 /** Live, useful state instead of an icon. Empty when there's nothing to say. */
 function useStateSlots(): Record<string, React.ReactNode> {
@@ -126,12 +130,27 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const slots = useStateSlots();
+  const { openPalette } = useShell();
+  const mod = useModKey();
 
   return (
     <nav aria-label="Primary" className={cn('flex h-full flex-col bg-rail px-3 py-3.5', className)}>
       <StoreMenu />
 
-      <div className="mt-5 flex flex-col">
+      <button
+        type="button"
+        onClick={() => {
+          onNavigate?.();
+          openPalette();
+        }}
+        className="mt-3 flex h-8 items-center gap-2 rounded-sm bg-well px-2.5 text-cell text-ink-3 shadow-[inset_0_0_0_1px_rgb(var(--line))] hover:text-ink-2"
+      >
+        <Glyph name="search" size={13} />
+        <span className="flex-1 text-left">Search or ask…</span>
+        <Kbd>{mod}K</Kbd>
+      </button>
+
+      <div className="mt-3 flex flex-col">
         {NAV.map((group, gi) => (
           <div key={gi} className="flex flex-col">
             {group.label ? (

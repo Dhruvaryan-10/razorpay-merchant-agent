@@ -39,14 +39,6 @@ module.exports = {
     extend: {
       colors: {
         ...ledgerColors,
-        // Transitional aliases for screens not yet rebuilt. Remove with them.
-        primary: token('ink'),
-        secondary: token('ink-3'),
-        surface: token('well'),
-        border: token('line'),
-        success: token('positive'),
-        warning: token('caution'),
-        error: token('critical'),
       },
       fontFamily: {
         sans: ['var(--font-geist-sans)', 'IBM Plex Sans', 'system-ui', 'sans-serif'],

@@ -165,8 +165,10 @@ export function DataTable<T>({
                         </span>
                       ) : null}
                     </button>
-                  ) : (
+                  ) : column.header ? (
                     column.header
+                  ) : (
+                    <span className="sr-only">Open</span>
                   )}
                 </th>
               ))}

@@ -7,6 +7,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/cn';
 import { duration, ease } from '@/lib/motion';
+import { useGlobalHotkeys } from '@/hooks/useGlobalHotkeys';
+import { CommandPalette } from './CommandPalette';
 import { isActive } from './nav';
 import { ShellContext } from './ShellContext';
 import { Sidebar } from './Sidebar';
@@ -91,14 +93,7 @@ function MobileTabBar({ onMore }: { onMore: () => void }) {
   );
 }
 
-export function AppShell({
-  children,
-  palette,
-}: {
-  children: React.ReactNode;
-  /** The command palette, rendered once for the whole workspace. */
-  palette?: (props: { open: boolean; query: string; onOpenChange: (open: boolean) => void }) => React.ReactNode;
-}) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
   const [paletteState, setPaletteState] = useState({ open: false, query: '' });
@@ -109,6 +104,7 @@ export function AppShell({
 
   const openPalette = useCallback((query = '') => setPaletteState({ open: true, query }), []);
   const context = useMemo(() => ({ openNav: () => setNavOpen(true), openPalette }), [openPalette]);
+  useGlobalHotkeys(openPalette);
 
   return (
     <ShellContext.Provider value={context}>
@@ -119,7 +115,7 @@ export function AppShell({
         Skip to content
       </a>
       <div className="min-h-screen bg-canvas lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-line bg-rail lg:block">
+        <aside aria-label="Workspace navigation" className="hidden border-r border-line bg-rail lg:block">
           <div className="sticky top-0 h-screen">
             <Sidebar />
           </div>
@@ -130,11 +126,11 @@ export function AppShell({
       </div>
       <NavSheet open={navOpen} onOpenChange={setNavOpen} />
       <MobileTabBar onMore={() => setNavOpen(true)} />
-      {palette?.({
-        open: paletteState.open,
-        query: paletteState.query,
-        onOpenChange: (open) => setPaletteState((s) => ({ ...s, open })),
-      })}
+      <CommandPalette
+        open={paletteState.open}
+        initialQuery={paletteState.query}
+        onOpenChange={(open) => setPaletteState((s) => ({ ...s, open }))}
+      />
     </ShellContext.Provider>
   );
 }

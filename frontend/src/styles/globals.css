@@ -88,34 +88,3 @@
     animation: none;
   }
 }
-
-/* ------------------------------------------------------------------------
- * Transitional: classes used by AppLayout and ConnectionScreen until those
- * screens are rebuilt on the Ledger primitives. Delete with them.
- * ---------------------------------------------------------------------- */
-@layer components {
-  .legacy input,
-  .legacy select {
-    @apply bg-well border border-line-strong rounded-sm px-3 py-2 text-ink placeholder:text-ink-3;
-  }
-
-  .card {
-    @apply border-t border-line py-4;
-  }
-
-  .button {
-    @apply inline-flex items-center justify-center h-9 px-4 rounded-sm font-medium text-cell transition-colors duration-instant;
-  }
-
-  .button-primary {
-    @apply bg-ink text-on-ink hover:bg-ink/90;
-  }
-
-  .button-secondary {
-    @apply bg-well text-ink hover:bg-line;
-  }
-
-  .text-label {
-    @apply text-meta text-ink-3;
-  }
-}

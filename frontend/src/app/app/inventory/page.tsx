@@ -1,8 +1,13 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import { LegacyInventory } from '@/components/legacy/LegacyRoutes';
+import { InventoryView } from '@/components/inventory/InventoryView';
 
 export const metadata: Metadata = { title: 'Inventory' };
 
 export default function Page() {
-  return <LegacyInventory />;
+  return (
+    <Suspense>
+      <InventoryView />
+    </Suspense>
+  );
 }
