@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { PageBody, PageHeader } from '@/components/shell/PageHeader';
 import { FilterChip } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -12,8 +12,8 @@ import { Pagination } from '@/components/ui/Pagination';
 import { StatusMark } from '@/components/ui/StatusMark';
 import { Tabs } from '@/components/ui/Tabs';
 import { useOrderCounts, useOrders } from '@/hooks/queries';
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useRecordParam } from '@/hooks/useRecordParam';
+import { useSlashToFocus, useUrlSearch } from '@/hooks/useUrlSearch';
 import { useUrlState } from '@/hooks/useUrlState';
 import { cn } from '@/lib/cn';
 import { formatMoney, formatNumber, formatWhen } from '@/lib/format';
@@ -94,22 +94,14 @@ export function OrdersView() {
   const url = useUrlState();
   const drawer = useRecordParam('order');
   const status = url.get('status');
-  const urlQuery = url.get('q');
   const min = url.getNumber('min');
   const page = Math.max(1, url.getNumber('page') ?? 1);
 
-  // Search types into local state; the URL (and the request) follow 250ms later.
-  const [search, setSearch] = useState(urlQuery);
-  const debounced = useDebouncedValue(search, 250);
-  useEffect(() => {
-    if (debounced !== urlQuery) url.set({ q: debounced || null, page: null }, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced]);
-  useEffect(() => setSearch(urlQuery), [urlQuery]);
+  const { search, setSearch, query: urlQuery } = useUrlSearch();
+  const searchRef = useSlashToFocus();
 
   const [amountDraft, setAmountDraft] = useState('');
   const [addingAmount, setAddingAmount] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const params = {
     page,
@@ -120,19 +112,6 @@ export function OrdersView() {
   };
   const { data, isPending, isError, error, refetch, isPlaceholderData } = useOrders(params);
   const counts = useOrderCounts(ORDER_STATUS_TABS);
-
-  // "/" focuses search, like most record tools.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement;
-      if (event.key !== '/' || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
-      if (document.querySelector('[role="dialog"]')) return;
-      event.preventDefault();
-      searchRef.current?.focus();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   const filtered = Boolean(status || urlQuery || min !== null);
   const clearFilters = () => {

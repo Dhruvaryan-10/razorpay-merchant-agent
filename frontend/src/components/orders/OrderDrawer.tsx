@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Drawer, DrawerSection } from '@/components/ui/Drawer';
+import { StepButtons, useSiblingSteps } from '@/components/ui/DrawerStepper';
 import { Button } from '@/components/ui/Button';
 import { ErrorNotice } from '@/components/ui/EmptyState';
 import { Kbd } from '@/components/ui/Kbd';
@@ -18,6 +19,8 @@ import { duration } from '@/lib/motion';
 import { orderStatus, paymentLabel } from '@/lib/status';
 import { adminOrderUrl } from '@/lib/woocommerce';
 import type { Address, Order } from '@/types';
+
+const orderId = (o: Order) => o.external_id;
 
 function addressLines(address: Address | undefined) {
   if (!address) return [];
@@ -52,20 +55,7 @@ export function OrderDrawer({ siblings = [] }: { siblings?: Order[] }) {
 
   const fromList = siblings.find((o) => o.external_id === id);
   const head = order ?? fromList;
-  const index = siblings.findIndex((o) => o.external_id === id);
-  const prev = index > 0 ? siblings[index - 1] : null;
-  const next = index >= 0 && index < siblings.length - 1 ? siblings[index + 1] : null;
-
-  useEffect(() => {
-    if (id === null) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key === '[' && prev) replace(prev.external_id);
-      if (event.key === ']' && next) replace(next.external_id);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [id, prev, next, replace]);
+  const steps = useSiblingSteps(siblings, id, orderId, replace);
 
   const meta = head ? orderStatus(head.status) : null;
   const wooUrl = id !== null ? adminOrderUrl(store, id) : null;
@@ -80,19 +70,6 @@ export function OrderDrawer({ siblings = [] }: { siblings?: Order[] }) {
     }
   };
 
-  const stepButton = (target: Order | null, label: string, glyphClass: string, key: string) => (
-    <button
-      type="button"
-      disabled={!target}
-      onClick={() => target && replace(target.external_id)}
-      aria-label={`${label} order`}
-      title={`${label} (${key})`}
-      className="grid h-8 w-8 place-items-center rounded-sm text-ink-2 hover:bg-well hover:text-ink disabled:text-ink-4 disabled:hover:bg-transparent"
-    >
-      <Glyph name="chevron" size={12} className={glyphClass} />
-    </button>
-  );
-
   return (
     <Drawer
       open={id !== null}
@@ -104,11 +81,8 @@ export function OrderDrawer({ siblings = [] }: { siblings?: Order[] }) {
         </span>
       }
       navigation={
-        siblings.length > 1 && index >= 0 ? (
-          <span className="flex">
-            {stepButton(prev, 'Previous', '-rotate-90', '[')}
-            {stepButton(next, 'Next', 'rotate-90', ']')}
-          </span>
+        steps.active ? (
+          <StepButtons prev={steps.prev} next={steps.next} getId={orderId} go={replace} noun="order" />
         ) : null
       }
       footer={
@@ -235,7 +209,7 @@ export function OrderDrawer({ siblings = [] }: { siblings?: Order[] }) {
           <p className="px-5 py-4 text-meta text-ink-3">
             Status changes are made in WooCommerce. This workspace reads your store and doesn’t offer actions it can’t perform.
           </p>
-          {siblings.length > 1 && index >= 0 ? (
+          {steps.active ? (
             <p className="hidden px-5 pb-5 text-meta text-ink-3 md:block">
               <Kbd>[</Kbd> <Kbd>]</Kbd> previous and next · <Kbd>esc</Kbd> close
             </p>
