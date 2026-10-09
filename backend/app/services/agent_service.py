@@ -4,6 +4,8 @@ from typing import Dict, List, Any
 from sqlalchemy.orm import Session
 from app.models import AgentExecution
 from .connector_service import ConnectorService
+from .metrics_service import build_dashboard, fetch_all, format_inr
+from .stock import LOW_STOCK_THRESHOLD, STOCK_LOW, STOCK_OUT, classify_stock, order_total
 import uuid
 
 
@@ -33,13 +35,12 @@ class AgentService:
         },
         "low_stock_products": {
             "patterns": [
-                r"low\s+stock",
+                r"low[\s-]+stock",
                 r"low\s+inventory",
-                r"products?\s+low\s+stock",
                 r"approaching\s+low\s+stock",
             ],
             "tool": "list_products",
-            "params": {"stock_status": "lowstock"},
+            "params": {"stock_level": "low"},
         },
         "out_of_stock": {
             "patterns": [
@@ -48,7 +49,7 @@ class AgentService:
                 r"unavailable\s+products?",
             ],
             "tool": "list_products",
-            "params": {"stock_status": "outofstock"},
+            "params": {"stock_level": "out"},
         },
         "recent_customers": {
             "patterns": [
@@ -87,8 +88,7 @@ class AgentService:
         },
         "todays_sales": {
             "patterns": [
-                r"today\'s\s+sales",
-                r"today\s+sales",
+                r"today['’]?s?\s+sales",
                 r"sales\s+today",
             ],
             "tool": "list_orders",
@@ -127,201 +127,150 @@ class AgentService:
         return None, None
 
     @staticmethod
-    async def process_query(db: Session, store_id: str, query: str) -> Dict[str, Any]:
-        """Process an agent query and return results"""
-        start_time = time.time()
-        tools_executed: List[Dict[str, Any]] = []
-        result_text = ""
-
-        intent, params = AgentService._extract_intent(query)
-
-        if not intent:
-            result_text = "I can help with orders, products, inventory and customers. Try asking about pending orders, low stock, or specific products."
-
-            execution = AgentExecution(
-                id=uuid.uuid4(),
-                store_id=store_id,
-                query=query,
-                status="completed",
-                output_json={"result": result_text},
-                duration_ms=int((time.time() - start_time) * 1000),
-            )
-            db.add(execution)
-            db.commit()
-
-            return {
-                "query": query,
-                "result": result_text,
-                "tools": tools_executed,
-                "total_duration_ms": int((time.time() - start_time) * 1000),
-            }
-
+    def _store_uuid(store_id: str):
         try:
-            connector = ConnectorService.get_connector(db, store_id)
+            return uuid.UUID(str(store_id))
+        except (TypeError, ValueError):
+            return store_id
 
-            # Execute based on intent
-            if intent == "pending_orders":
-                tool_start = time.time()
-                response = await connector.list_orders(status="pending")
-                tools_executed.append({
-                    "name": "search_orders",
-                    "input": {"status": "pending"},
-                    "output": {"count": len(response.get("orders", []))},
-                    "duration_ms": int((time.time() - tool_start) * 1000),
-                })
-
-                count = len(response.get("orders", []))
-                result_text = f"Found {count} pending orders."
-
-            elif intent == "high_value_pending_orders":
-                tool_start = time.time()
-                response = await connector.list_orders(status="pending")
-                tools_executed.append({
-                    "name": "search_orders",
-                    "input": {"status": "pending"},
-                    "output": {"count": len(response.get("orders", []))},
-                    "duration_ms": int((time.time() - tool_start) * 1000),
-                })
-
-                # Filter by amount
-                amount_threshold = params.get("amount_threshold", 0)
-                filtered = [
-                    o for o in response.get("orders", [])
-                    if float(o.get("total", 0)) >= amount_threshold
-                ]
-
-                tools_executed.append({
-                    "name": "filter_orders",
-                    "input": {"amount_threshold": amount_threshold},
-                    "output": {"count": len(filtered)},
-                    "duration_ms": int((time.time() - tool_start) * 1000),
-                })
-
-                result_text = f"Found {len(filtered)} pending orders above ₹{amount_threshold}."
-
-            elif intent == "low_stock_products":
-                tool_start = time.time()
-                response = await connector.list_products(stock_status="lowstock")
-                tools_executed.append({
-                    "name": "list_products",
-                    "input": {"stock_status": "lowstock"},
-                    "output": {"count": len(response.get("products", []))},
-                    "duration_ms": int((time.time() - tool_start) * 1000),
-                })
-
-                count = len(response.get("products", []))
-                result_text = f"Found {count} products with low stock."
-
-            elif intent == "out_of_stock":
-                tool_start = time.time()
-                response = await connector.list_products(stock_status="outofstock")
-                tools_executed.append({
-                    "name": "list_products",
-                    "input": {"stock_status": "outofstock"},
-                    "output": {"count": len(response.get("products", []))},
-                    "duration_ms": int((time.time() - tool_start) * 1000),
-                })
-
-                count = len(response.get("products", []))
-                result_text = f"Found {count} out of stock products."
-
-            elif intent == "recent_customers":
-                tool_start = time.time()
-                response = await connector.list_customers(per_page=10)
-                tools_executed.append({
-                    "name": "list_customers",
-                    "input": {"per_page": 10},
-                    "output": {"count": len(response.get("customers", []))},
-                    "duration_ms": int((time.time() - tool_start) * 1000),
-                })
-
-                count = len(response.get("customers", []))
-                result_text = f"Retrieved {count} recent customers."
-
-            elif intent == "search_order_by_number":
-                order_id = params.get("order_id")
-                tool_start = time.time()
-                try:
-                    order = await connector.get_order(order_id)
-                    tools_executed.append({
-                        "name": "get_order",
-                        "input": {"order_id": order_id},
-                        "output": {"found": bool(order)},
-                        "duration_ms": int((time.time() - tool_start) * 1000),
-                    })
-
-                    if order:
-                        result_text = f"Found order #{order.get('number', order_id)}: Status {order.get('status')} - ₹{order.get('total')}"
-                    else:
-                        result_text = f"Order {order_id} not found."
-                except:
-                    result_text = f"Could not retrieve order {order_id}."
-
-            elif intent == "search_product":
-                search_query = params.get("query", "")
-                tool_start = time.time()
-                response = await connector.search_products(search_query, per_page=5)
-                tools_executed.append({
-                    "name": "search_products",
-                    "input": {"query": search_query},
-                    "output": {"count": len(response.get("products", []))},
-                    "duration_ms": int((time.time() - tool_start) * 1000),
-                })
-
-                products = response.get("products", [])
-                if products:
-                    result_text = f"Found {len(products)} products matching '{search_query}'."
-                else:
-                    result_text = f"No products found matching '{search_query}'."
-
-            elif intent == "search_customer":
-                search_query = params.get("query", "")
-                tool_start = time.time()
-                response = await connector.list_customers(search=search_query, per_page=5)
-                tools_executed.append({
-                    "name": "search_customers",
-                    "input": {"query": search_query},
-                    "output": {"count": len(response.get("customers", []))},
-                    "duration_ms": int((time.time() - tool_start) * 1000),
-                })
-
-                customers = response.get("customers", [])
-                if customers:
-                    result_text = f"Found {len(customers)} customers matching '{search_query}'."
-                else:
-                    result_text = f"No customers found matching '{search_query}'."
-
-            elif intent == "todays_sales":
-                tool_start = time.time()
-                response = await connector.list_orders(per_page=50)
-                tools_executed.append({
-                    "name": "list_orders",
-                    "input": {"per_page": 50},
-                    "output": {"count": len(response.get("orders", []))},
-                    "duration_ms": int((time.time() - tool_start) * 1000),
-                })
-
-                orders = response.get("orders", [])
-                result_text = f"Retrieved sales data: {len(orders)} orders found."
-
-        except Exception as e:
-            result_text = f"Error processing request: {str(e)}"
-
-        # Save execution
+    @staticmethod
+    def _record(db: Session, store_id: str, query: str, result_text: str, tools_count: int, started: float) -> None:
         execution = AgentExecution(
             id=uuid.uuid4(),
-            store_id=store_id,
+            store_id=AgentService._store_uuid(store_id),
             query=query,
             status="completed",
-            output_json={"result": result_text, "tools_count": len(tools_executed)},
-            duration_ms=int((time.time() - start_time) * 1000),
+            output_json={"result": result_text, "tools_count": tools_count},
+            duration_ms=int((time.time() - started) * 1000),
         )
         db.add(execution)
         db.commit()
 
+    @staticmethod
+    async def process_query(db: Session, store_id: str, query: str) -> Dict[str, Any]:
+        """Process an agent query and return results.
+
+        The response names the matched intent and its parameters so a client can
+        render the same records the tools read.
+        """
+        start_time = time.time()
+        tools_executed: List[Dict[str, Any]] = []
+
+        intent, params = AgentService._extract_intent(query)
+
+        def tool(name: str, tool_input: Dict[str, Any], output: Dict[str, Any], started: float) -> None:
+            tools_executed.append({
+                "name": name,
+                "input": tool_input,
+                "output": output,
+                "duration_ms": int((time.time() - started) * 1000),
+            })
+
+        if not intent:
+            result_text = "I can help with orders, products, inventory and customers. Try asking about pending orders, low stock, or specific products."
+        else:
+            try:
+                connector = ConnectorService.get_connector(db, store_id)
+                result_text = await AgentService._run(connector, intent, params or {}, tool)
+            except Exception as e:
+                result_text = f"Error processing request: {str(e)}"
+
+        AgentService._record(db, store_id, query, result_text, len(tools_executed), start_time)
+
         return {
             "query": query,
+            "intent": intent,
+            "params": params or {},
             "result": result_text,
             "tools": tools_executed,
             "total_duration_ms": int((time.time() - start_time) * 1000),
         }
+
+    @staticmethod
+    async def _run(connector, intent: str, params: Dict[str, Any], tool) -> str:
+        """Execute one intent against the connector and describe the outcome."""
+        if intent in ("pending_orders", "high_value_pending_orders"):
+            started = time.time()
+            orders, _ = await fetch_all(connector.list_orders, "orders", status="pending")
+            tool("search_orders", {"status": "pending"}, {"count": len(orders)}, started)
+
+            if intent == "pending_orders":
+                value = sum(order_total(o) for o in orders)
+                return f"Found {len(orders)} pending orders worth {format_inr(value)}."
+
+            threshold = params.get("amount_threshold", 0)
+            started = time.time()
+            filtered = [o for o in orders if order_total(o) >= threshold]
+            tool("filter_orders", {"amount_threshold": threshold}, {"count": len(filtered)}, started)
+            value = sum(order_total(o) for o in filtered)
+            return (
+                f"Found {len(filtered)} pending orders of {format_inr(threshold)} or more, "
+                f"worth {format_inr(value)}."
+            )
+
+        if intent in ("low_stock_products", "out_of_stock"):
+            level = STOCK_LOW if intent == "low_stock_products" else STOCK_OUT
+            started = time.time()
+            products, _ = await fetch_all(connector.list_products, "products")
+            matching = [p for p in products if classify_stock(p) == level]
+            tool("list_products", {"stock_level": level}, {"count": len(matching)}, started)
+            if level == STOCK_LOW:
+                return f"Found {len(matching)} products below the stock threshold of {LOW_STOCK_THRESHOLD}."
+            return f"Found {len(matching)} out of stock products."
+
+        if intent == "recent_customers":
+            started = time.time()
+            customers, _ = await fetch_all(connector.list_customers, "customers")
+            dated = [c for c in customers if c.get("date_created")]
+            shown = min(len(dated), 10)
+            tool("list_customers", {"sort": "newest", "limit": 10}, {"count": shown}, started)
+            if not dated:
+                return "Customer join dates are not available from this store."
+            return f"Showing the {shown} customers who joined most recently."
+
+        if intent == "search_order_by_number":
+            order_id = params.get("order_id")
+            started = time.time()
+            try:
+                order = await connector.get_order(order_id)
+            except Exception:
+                order = None
+            tool("get_order", {"order_id": order_id}, {"found": bool(order)}, started)
+            if order:
+                return (
+                    f"Order #{order.get('number', order_id)} is {order.get('status')}, "
+                    f"{format_inr(order_total(order))}."
+                )
+            return f"Order {order_id} not found."
+
+        if intent == "search_product":
+            search_query = params.get("query", "")
+            started = time.time()
+            response = await connector.search_products(search_query, per_page=20)
+            count = len(response.get("products", []))
+            tool("search_products", {"query": search_query}, {"count": count}, started)
+            if count:
+                return f"Found {count} products matching '{search_query}'."
+            return f"No products found matching '{search_query}'."
+
+        if intent == "search_customer":
+            search_query = params.get("query", "")
+            started = time.time()
+            response = await connector.list_customers(search=search_query, per_page=20)
+            count = len(response.get("customers", []))
+            tool("search_customers", {"query": search_query}, {"count": count}, started)
+            if count:
+                return f"Found {count} customers matching '{search_query}'."
+            return f"No customers found matching '{search_query}'."
+
+        if intent == "todays_sales":
+            started = time.time()
+            orders, _ = await fetch_all(connector.list_orders, "orders")
+            summary = build_dashboard(orders, [], "today")["period"]["current"]
+            tool("list_orders", {"period": "today"}, {"count": summary["orders"]}, started)
+            return (
+                f"{format_inr(summary['net_revenue'])} from {summary['paid_orders']} paid orders today "
+                f"({summary['orders']} placed in total)."
+            )
+
+        return "I can help with orders, products, inventory and customers."

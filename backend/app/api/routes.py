@@ -1,19 +1,57 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from datetime import datetime
 from typing import Optional
-import uuid
 
 from app.database import get_db
-from app.models import Store, Order, Product, Customer, AgentExecution
-from app.schemas import (
-    StoreResponse, OrderResponse, ProductResponse, CustomerResponse,
-    AgentQuery, AgentResponse, ToolExecution
-)
+from app.models import AgentExecution
+from app.schemas import AgentQuery, ConnectionCreate
 from app.services import StoreService, ConnectorService, AgentService
+from app.services.metrics_service import build_dashboard, fetch_all, format_inr, DEFAULT_PERIOD
+from app.services.normalize import normalize_customer, normalize_order, normalize_product
+from app.services.stock import LOW_STOCK_THRESHOLD, classify_stock, order_total
 from app.connectors import WooCommerceConnector
 
 router = APIRouter(prefix="/api", tags=["merchant"])
+
+# Accepted values for the products stock filter, mapped to stock levels.
+# "lowstock"/"instock"/"outofstock" are kept for existing callers.
+STOCK_FILTERS = {
+    "low": "low", "lowstock": "low",
+    "out": "out", "outofstock": "out",
+    "healthy": "healthy", "instock": "healthy",
+}
+
+
+def _store_payload(store) -> dict:
+    return {
+        "id": str(store.id),
+        "name": store.name,
+        "store_url": store.store_url,
+        "provider": store.provider,
+        "mode": store.mode,
+        "status": store.status,
+        "last_synced_at": store.last_synced_at,
+        "created_at": store.created_at,
+    }
+
+
+def _resolve_store_id(db: Session, store_id: Optional[str]) -> Optional[str]:
+    """Use the requested store, falling back to the merchant's first store."""
+    if store_id:
+        return store_id
+    merchant = StoreService.get_or_create_merchant(db)
+    stores = StoreService.get_stores(db, str(merchant.id))
+    return str(stores[0].id) if stores else None
+
+
+def _page(total: int, page: int, per_page: int) -> dict:
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page,
+    }
+
 
 # ===== Store Management =====
 
@@ -37,32 +75,34 @@ async def create_demo_store(db: Session = Depends(get_db)):
 
 @router.post("/stores/connect")
 async def connect_woocommerce_store(
-    store_url: str = Query(...),
-    consumer_key: str = Query(...),
-    consumer_secret: str = Query(...),
+    credentials: ConnectionCreate,
     db: Session = Depends(get_db),
 ):
-    """Connect a real WooCommerce store"""
+    """Connect a real WooCommerce store.
+
+    Credentials arrive in the JSON body only, never the query string, so the
+    consumer secret stays out of URLs, proxies and access logs.
+    """
     try:
-        # Validate inputs
+        store_url = credentials.store_url.strip()
+        consumer_key = credentials.consumer_key.strip()
+        consumer_secret = credentials.consumer_secret.strip()
+
         if not store_url or not consumer_key or not consumer_secret:
             raise Exception("Missing required fields")
 
-        # Create connector to test connection
         connector = WooCommerceConnector(
             store_url=store_url,
             consumer_key=consumer_key,
             consumer_secret=consumer_secret,
         )
 
-        # Verify the connection
         if not await connector.verify_connection():
             raise Exception("Could not connect to WooCommerce. Check your credentials.")
 
-        # Get store info
         store_info = await connector.get_store_info()
+        store_name = store_info.get("name", "WooCommerce Store")
 
-        # Create merchant and store
         merchant = StoreService.get_or_create_merchant(db)
 
         store = StoreService.create_live_store(
@@ -71,11 +111,12 @@ async def connect_woocommerce_store(
             store_url=store_url,
             consumer_key=consumer_key,
             consumer_secret=consumer_secret,
+            name=store_name,
         )
 
         return {
             "store_id": str(store.id),
-            "name": store_info.get("name", "WooCommerce Store"),
+            "name": store_name,
             "store_url": store_url,
             "mode": "live",
             "status": "connected",
@@ -91,21 +132,7 @@ async def list_stores(db: Session = Depends(get_db)):
     try:
         merchant = StoreService.get_or_create_merchant(db)
         stores = StoreService.get_stores(db, str(merchant.id))
-
-        result = []
-        for store in stores:
-            result.append({
-                "id": str(store.id),
-                "name": store.name,
-                "store_url": store.store_url,
-                "provider": store.provider,
-                "mode": store.mode,
-                "status": store.status,
-                "last_synced_at": store.last_synced_at,
-                "created_at": store.created_at,
-            })
-
-        return {"stores": result}
+        return {"stores": [_store_payload(store) for store in stores]}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -117,17 +144,7 @@ async def get_store(store_id: str, db: Session = Depends(get_db)):
         store = StoreService.get_store(db, store_id)
         if not store:
             raise Exception("Store not found")
-
-        return {
-            "id": str(store.id),
-            "name": store.name,
-            "store_url": store.store_url,
-            "provider": store.provider,
-            "mode": store.mode,
-            "status": store.status,
-            "last_synced_at": store.last_synced_at,
-            "created_at": store.created_at,
-        }
+        return _store_payload(store)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -145,16 +162,20 @@ async def disconnect_store(store_id: str, db: Session = Depends(get_db)):
 # ===== Dashboard =====
 
 @router.get("/dashboard")
-async def get_dashboard(store_id: Optional[str] = None, db: Session = Depends(get_db)):
-    """Get dashboard metrics and insights"""
+async def get_dashboard(
+    store_id: Optional[str] = None,
+    period: str = Query(DEFAULT_PERIOD),
+    db: Session = Depends(get_db),
+):
+    """Dashboard figures for a period (today, 7d, 30d, 90d).
+
+    Revenue counts paid orders only (processing, on-hold, completed); pending,
+    cancelled, failed and refunded orders are reported separately.
+    """
     try:
-        # Get first store if not specified
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"error": "No store connected"}
-            store_id = str(stores[0].id)
+            return {"error": "No store connected"}
 
         store = StoreService.get_store(db, store_id)
         if not store:
@@ -162,41 +183,21 @@ async def get_dashboard(store_id: Optional[str] = None, db: Session = Depends(ge
 
         connector = ConnectorService.get_connector(db, store_id)
 
-        # Get metrics
-        orders_response = await connector.list_orders(per_page=100)
-        products_response = await connector.list_products(per_page=100)
-        customers_response = await connector.list_customers(per_page=100)
+        orders, orders_truncated = await fetch_all(connector.list_orders, "orders")
+        products, products_truncated = await fetch_all(connector.list_products, "products")
+        customers_response = await connector.list_customers(per_page=1)
 
-        orders = orders_response.get("orders", [])
-        products = products_response.get("products", [])
-        customers = customers_response.get("customers", [])
+        data = build_dashboard(orders, products, period)
+        current = data["period"]["current"]
+        pending = data["pending"]
 
-        # Calculate metrics
-        total_orders = len(orders)
-        pending_orders = len([o for o in orders if o.get("status") == "pending"])
-        total_revenue = sum(float(o.get("total", 0)) for o in orders)
-        pending_value = sum(float(o.get("total", 0)) for o in orders if o.get("status") == "pending")
-
-        low_stock = len([p for p in products if p.get("stock_status") in ["lowstock", "outofstock"]])
-        out_of_stock = len([p for p in products if p.get("stock_status") == "outofstock"])
-
-        # Recent orders - normalize before returning
-        recent_orders_raw = sorted(orders, key=lambda x: x.get("date_created", ""), reverse=True)[:5]
-        recent_orders = []
-        for order in recent_orders_raw:
-            recent_orders.append({
-                "id": str(order.get("id", "")),
-                "order_number": str(order.get("number", order.get("id", ""))),
-                "external_id": order.get("id", 0),
-                "status": order.get("status", ""),
-                "total": float(order.get("total", 0)),
-                "currency": order.get("currency", "INR"),
-                "customer_id": order.get("customer_id"),
-                "customer_name": order.get("billing", {}).get("first_name", ""),
-                "customer_email": order.get("billing", {}).get("email", ""),
-                "payment_method": order.get("payment_method", ""),
-                "created_at": order.get("date_created", datetime.now().isoformat()),
-            })
+        insights = [
+            f"{data['low_count']} products below the stock threshold of {LOW_STOCK_THRESHOLD}"
+            if data["low_count"] else None,
+            f"{format_inr(pending['value'])} tied up in {pending['count']} pending orders"
+            if pending["count"] else None,
+            f"{data['out_count']} products out of stock" if data["out_count"] else None,
+        ]
 
         return {
             "store": {
@@ -206,21 +207,25 @@ async def get_dashboard(store_id: Optional[str] = None, db: Session = Depends(ge
                 "status": store.status,
             },
             "metrics": {
-                "total_revenue": total_revenue,
-                "total_orders": total_orders,
-                "pending_orders": pending_orders,
-                "pending_value": pending_value,
-                "low_stock_count": low_stock,
-                "out_of_stock_count": out_of_stock,
+                "total_revenue": current["net_revenue"],
+                "total_orders": current["orders"],
+                "pending_orders": pending["count"],
+                "pending_value": pending["value"],
+                "low_stock_count": data["low_count"],
+                "out_of_stock_count": data["out_count"],
                 "total_products": len(products),
-                "total_customers": len(customers),
+                "total_customers": customers_response.get("total", 0),
             },
-            "recent_orders": recent_orders,
-            "insights": [
-                f"{low_stock} products approaching low stock" if low_stock > 0 else None,
-                f"₹{pending_value:.0f} tied up in {pending_orders} pending orders" if pending_orders > 0 else None,
-                f"{out_of_stock} products out of stock" if out_of_stock > 0 else None,
-            ],
+            "period": data["period"],
+            "pending": pending,
+            "inventory": data["inventory"],
+            "coverage": {
+                "orders_scanned": len(orders),
+                "orders_truncated": orders_truncated,
+                "products_truncated": products_truncated,
+            },
+            "recent_orders": data["recent_orders"],
+            "insights": [i for i in insights if i],
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -231,49 +236,45 @@ async def get_dashboard(store_id: Optional[str] = None, db: Session = Depends(ge
 @router.get("/orders")
 async def list_orders(
     store_id: Optional[str] = None,
-    page: int = Query(1),
-    per_page: int = Query(20),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
     status: Optional[str] = None,
     search: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    min_total: Optional[float] = Query(None, ge=0),
     db: Session = Depends(get_db),
 ):
-    """List orders"""
+    """List orders.
+
+    min_total keeps orders worth at least that amount. WooCommerce can't
+    filter by total, so matching orders are scanned and paginated here.
+    """
     try:
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"error": "No store connected"}
-            store_id = str(stores[0].id)
+            return {"error": "No store connected"}
 
         connector = ConnectorService.get_connector(db, store_id)
-        response = await connector.list_orders(page=page, per_page=per_page, status=status, search=search)
 
+        if min_total is not None:
+            orders, _ = await fetch_all(
+                connector.list_orders, "orders", status=status, search=search, customer_id=customer_id
+            )
+            matching = [o for o in orders if order_total(o) >= min_total]
+            start = (page - 1) * per_page
+            return {
+                "orders": [normalize_order(o) for o in matching[start:start + per_page]],
+                **_page(len(matching), page, per_page),
+            }
+
+        response = await connector.list_orders(
+            page=page, per_page=per_page, status=status, search=search, customer_id=customer_id
+        )
         orders = response.get("orders", [])
 
-        # Normalize response
-        normalized = []
-        for order in orders:
-            normalized.append({
-                "id": str(order.get("id", "")),
-                "order_number": str(order.get("number", order.get("id", ""))),
-                "external_id": order.get("id", 0),
-                "status": order.get("status", ""),
-                "total": float(order.get("total", 0)),
-                "currency": order.get("currency", "INR"),
-                "customer_id": order.get("customer_id"),
-                "customer_name": order.get("billing", {}).get("first_name", ""),
-                "customer_email": order.get("billing", {}).get("email", ""),
-                "payment_method": order.get("payment_method", ""),
-                "created_at": order.get("date_created", datetime.now().isoformat()),
-            })
-
         return {
-            "orders": normalized,
-            "total": response.get("total", len(orders)),
-            "page": page,
-            "per_page": per_page,
-            "total_pages": (response.get("total", len(orders)) + per_page - 1) // per_page,
+            "orders": [normalize_order(order) for order in orders],
+            **_page(response.get("total", len(orders)), page, per_page),
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -287,12 +288,9 @@ async def get_order(
 ):
     """Get order details"""
     try:
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"error": "No store connected"}
-            store_id = str(stores[0].id)
+            return {"error": "No store connected"}
 
         connector = ConnectorService.get_connector(db, store_id)
         order = await connector.get_order(order_id)
@@ -300,32 +298,7 @@ async def get_order(
         if not order:
             raise Exception("Order not found")
 
-        # Normalize
-        line_items = []
-        for item in order.get("line_items", []):
-            line_items.append({
-                "product_id": item.get("product_id"),
-                "quantity": item.get("quantity"),
-                "price": float(item.get("price", 0)),
-                "name": item.get("name", ""),
-            })
-
-        return {
-            "id": str(order.get("id", "")),
-            "order_number": str(order.get("number", order.get("id", ""))),
-            "external_id": order.get("id", 0),
-            "status": order.get("status", ""),
-            "total": float(order.get("total", 0)),
-            "currency": order.get("currency", "INR"),
-            "customer_id": order.get("customer_id"),
-            "customer_name": order.get("billing", {}).get("first_name", ""),
-            "customer_email": order.get("billing", {}).get("email", ""),
-            "payment_method": order.get("payment_method", ""),
-            "billing_address": order.get("billing", {}),
-            "shipping_address": order.get("shipping", {}),
-            "line_items": line_items,
-            "created_at": order.get("date_created", datetime.now().isoformat()),
-        }
+        return normalize_order(order, detail=True)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -335,50 +308,40 @@ async def get_order(
 @router.get("/products")
 async def list_products(
     store_id: Optional[str] = None,
-    page: int = Query(1),
-    per_page: int = Query(20),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
     stock_status: Optional[str] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """List products"""
+    """List products.
+
+    stock_status filters by the shared stock definition (low, out, healthy)
+    rather than WooCommerce's own flag, which has no "low" state.
+    """
     try:
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"error": "No store connected"}
-            store_id = str(stores[0].id)
+            return {"error": "No store connected"}
 
         connector = ConnectorService.get_connector(db, store_id)
-        response = await connector.list_products(
-            page=page, per_page=per_page, stock_status=stock_status, search=search
-        )
+        level = STOCK_FILTERS.get(stock_status or "")
 
+        if level:
+            products, _ = await fetch_all(connector.list_products, "products", search=search)
+            matching = [p for p in products if classify_stock(p) == level]
+            start = (page - 1) * per_page
+            return {
+                "products": [normalize_product(p) for p in matching[start:start + per_page]],
+                **_page(len(matching), page, per_page),
+            }
+
+        response = await connector.list_products(page=page, per_page=per_page, search=search)
         products = response.get("products", [])
 
-        normalized = []
-        for product in products:
-            normalized.append({
-                "id": str(product.get("id", "")),
-                "external_id": product.get("id", 0),
-                "name": product.get("name", ""),
-                "sku": product.get("sku", ""),
-                "description": product.get("description", ""),
-                "price": float(product.get("price", 0)),
-                "stock_quantity": product.get("stock_quantity", 0),
-                "stock_status": product.get("stock_status", ""),
-                "status": product.get("status", ""),
-                "categories": product.get("categories", []),
-                "created_at": product.get("date_created", datetime.now().isoformat()),
-            })
-
         return {
-            "products": normalized,
-            "total": response.get("total", len(products)),
-            "page": page,
-            "per_page": per_page,
-            "total_pages": (response.get("total", len(products)) + per_page - 1) // per_page,
+            "products": [normalize_product(p) for p in products],
+            **_page(response.get("total", len(products)), page, per_page),
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -392,12 +355,9 @@ async def get_product(
 ):
     """Get product details"""
     try:
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"error": "No store connected"}
-            store_id = str(stores[0].id)
+            return {"error": "No store connected"}
 
         connector = ConnectorService.get_connector(db, store_id)
         product = await connector.get_product(product_id)
@@ -405,20 +365,7 @@ async def get_product(
         if not product:
             raise Exception("Product not found")
 
-        return {
-            "id": str(product.get("id", "")),
-            "external_id": product.get("id", 0),
-            "name": product.get("name", ""),
-            "sku": product.get("sku", ""),
-            "description": product.get("description", ""),
-            "price": float(product.get("price", 0)),
-            "stock_quantity": product.get("stock_quantity", 0),
-            "stock_status": product.get("stock_status", ""),
-            "status": product.get("status", ""),
-            "categories": product.get("categories", []),
-            "images": product.get("images", []),
-            "created_at": product.get("date_created", datetime.now().isoformat()),
-        }
+        return normalize_product(product, detail=True)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -432,57 +379,34 @@ async def get_inventory(
 ):
     """Get inventory insights"""
     try:
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"error": "No store connected"}
-            store_id = str(stores[0].id)
+            return {"error": "No store connected"}
 
         connector = ConnectorService.get_connector(db, store_id)
-        response = await connector.list_products(per_page=200)
+        products, truncated = await fetch_all(connector.list_products, "products")
 
-        products = response.get("products", [])
-
-        low_stock_threshold = 10
-
-        healthy = []
-        low_stock = []
-        out_of_stock = []
-
+        buckets = {"healthy": [], "low": [], "out": [], "untracked": []}
         for product in products:
-            normalized = {
-                "id": str(product.get("id", "")),
-                "external_id": product.get("id", 0),
-                "name": product.get("name", ""),
-                "sku": product.get("sku", ""),
-                "price": float(product.get("price", 0)),
-                "stock_quantity": product.get("stock_quantity", 0),
-                "stock_status": product.get("stock_status", ""),
-            }
-
-            stock_qty = product.get("stock_quantity", 0)
-
-            if stock_qty == 0:
-                out_of_stock.append(normalized)
-            elif stock_qty < low_stock_threshold:
-                low_stock.append(normalized)
-            else:
-                healthy.append(normalized)
+            normalized = normalize_product(product)
+            buckets[normalized["stock_level"]].append(normalized)
 
         return {
             "summary": {
                 "total_products": len(products),
-                "healthy_stock": len(healthy),
-                "low_stock": len(low_stock),
-                "out_of_stock": len(out_of_stock),
+                "healthy_stock": len(buckets["healthy"]),
+                "low_stock": len(buckets["low"]),
+                "out_of_stock": len(buckets["out"]),
+                "untracked": len(buckets["untracked"]),
             },
             "by_status": {
-                "healthy": healthy,
-                "low_stock": low_stock,
-                "out_of_stock": out_of_stock,
+                "healthy": buckets["healthy"],
+                "low_stock": buckets["low"],
+                "out_of_stock": buckets["out"],
+                "untracked": buckets["untracked"],
             },
-            "low_stock_threshold": low_stock_threshold,
+            "low_stock_threshold": LOW_STOCK_THRESHOLD,
+            "truncated": truncated,
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -493,45 +417,24 @@ async def get_inventory(
 @router.get("/customers")
 async def list_customers(
     store_id: Optional[str] = None,
-    page: int = Query(1),
-    per_page: int = Query(20),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """List customers"""
     try:
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"error": "No store connected"}
-            store_id = str(stores[0].id)
+            return {"error": "No store connected"}
 
         connector = ConnectorService.get_connector(db, store_id)
         response = await connector.list_customers(page=page, per_page=per_page, search=search)
-
         customers = response.get("customers", [])
 
-        normalized = []
-        for customer in customers:
-            normalized.append({
-                "id": str(customer.get("id", "")),
-                "external_id": customer.get("id", 0),
-                "name": f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip(),
-                "email": customer.get("email", ""),
-                "phone": customer.get("phone", ""),
-                "address": customer.get("billing", {}),
-                "total_spent": float(customer.get("total_spent", 0)),
-                "order_count": customer.get("orders_count", 0),
-                "created_at": customer.get("date_created", datetime.now().isoformat()),
-            })
-
         return {
-            "customers": normalized,
-            "total": response.get("total", len(customers)),
-            "page": page,
-            "per_page": per_page,
-            "total_pages": (response.get("total", len(customers)) + per_page - 1) // per_page,
+            "customers": [normalize_customer(c) for c in customers],
+            **_page(response.get("total", len(customers)), page, per_page),
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -545,12 +448,9 @@ async def get_customer(
 ):
     """Get customer details"""
     try:
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"error": "No store connected"}
-            store_id = str(stores[0].id)
+            return {"error": "No store connected"}
 
         connector = ConnectorService.get_connector(db, store_id)
         customer = await connector.get_customer(customer_id)
@@ -558,17 +458,7 @@ async def get_customer(
         if not customer:
             raise Exception("Customer not found")
 
-        return {
-            "id": str(customer.get("id", "")),
-            "external_id": customer.get("id", 0),
-            "name": f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip(),
-            "email": customer.get("email", ""),
-            "phone": customer.get("phone", ""),
-            "address": customer.get("billing", {}),
-            "total_spent": float(customer.get("total_spent", 0)),
-            "order_count": customer.get("orders_count", 0),
-            "created_at": customer.get("date_created", datetime.now().isoformat()),
-        }
+        return normalize_customer(customer)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -583,15 +473,11 @@ async def agent_query(
 ):
     """Process an agent query"""
     try:
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"error": "No store connected"}
-            store_id = str(stores[0].id)
+            return {"error": "No store connected"}
 
-        result = await AgentService.process_query(db, store_id, query_obj.query)
-        return result
+        return await AgentService.process_query(db, store_id, query_obj.query)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -599,32 +485,32 @@ async def agent_query(
 @router.get("/agent/executions")
 async def agent_executions(
     store_id: Optional[str] = None,
-    limit: int = Query(10),
+    limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     """Get agent execution history"""
     try:
+        store_id = _resolve_store_id(db, store_id)
         if not store_id:
-            merchant = StoreService.get_or_create_merchant(db)
-            stores = StoreService.get_stores(db, str(merchant.id))
-            if not stores:
-                return {"executions": []}
-            store_id = str(stores[0].id)
+            return {"executions": []}
+
+        store = StoreService.get_store(db, store_id)
+        if not store:
+            raise Exception("Store not found")
 
         executions = db.query(AgentExecution).filter(
-            AgentExecution.store_id == store_id
+            AgentExecution.store_id == store.id
         ).order_by(AgentExecution.created_at.desc()).limit(limit).all()
 
-        result = []
-        for exe in executions:
-            result.append({
+        return {"executions": [
+            {
                 "id": str(exe.id),
                 "query": exe.query,
                 "status": exe.status,
                 "duration_ms": exe.duration_ms,
                 "created_at": exe.created_at,
-            })
-
-        return {"executions": result}
+            }
+            for exe in executions
+        ]}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

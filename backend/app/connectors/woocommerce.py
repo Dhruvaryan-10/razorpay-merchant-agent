@@ -24,8 +24,13 @@ class WooCommerceConnector(BaseMerchantConnector):
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        """Make authenticated request to WooCommerce API with retry logic"""
+        with_total: bool = False,
+    ) -> Any:
+        """Make authenticated request to WooCommerce API with retry logic.
+
+        with_total=True returns (data, total) where total comes from the
+        X-WP-Total header, so pagination reflects the whole collection.
+        """
         url = f"{self.base_url}{endpoint}"
 
         auth = (self.consumer_key, self._consumer_secret)
@@ -52,7 +57,12 @@ class WooCommerceConnector(BaseMerchantConnector):
                         response.raise_for_status()
 
                     response.raise_for_status()
-                    return response.json()
+                    data = response.json()
+                    if with_total:
+                        total = response.headers.get("X-WP-Total")
+                        size = len(data) if isinstance(data, list) else 0
+                        return data, int(total) if total and total.isdigit() else size
+                    return data
 
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 401:
@@ -114,6 +124,7 @@ class WooCommerceConnector(BaseMerchantConnector):
         per_page: int = 20,
         status: Optional[str] = None,
         search: Optional[str] = None,
+        customer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """List orders from WooCommerce"""
         params = {
@@ -127,8 +138,10 @@ class WooCommerceConnector(BaseMerchantConnector):
             params["status"] = status
         if search:
             params["search"] = search
+        if customer_id:
+            params["customer"] = customer_id
 
-        data = await self._request("GET", "/orders", params=params)
+        data, total = await self._request("GET", "/orders", params=params, with_total=True)
 
         if not isinstance(data, list):
             return {
@@ -140,7 +153,7 @@ class WooCommerceConnector(BaseMerchantConnector):
 
         return {
             "orders": data,
-            "total": len(data),
+            "total": total,
             "page": page,
             "per_page": per_page,
         }
@@ -161,7 +174,7 @@ class WooCommerceConnector(BaseMerchantConnector):
             "order": "desc",
         }
 
-        data = await self._request("GET", "/orders", params=params)
+        data, total = await self._request("GET", "/orders", params=params, with_total=True)
 
         if not isinstance(data, list):
             return {
@@ -173,7 +186,7 @@ class WooCommerceConnector(BaseMerchantConnector):
 
         return {
             "orders": data,
-            "total": len(data),
+            "total": total,
             "page": page,
             "per_page": per_page,
         }
@@ -198,7 +211,7 @@ class WooCommerceConnector(BaseMerchantConnector):
         if search:
             params["search"] = search
 
-        data = await self._request("GET", "/products", params=params)
+        data, total = await self._request("GET", "/products", params=params, with_total=True)
 
         if not isinstance(data, list):
             return {
@@ -210,7 +223,7 @@ class WooCommerceConnector(BaseMerchantConnector):
 
         return {
             "products": data,
-            "total": len(data),
+            "total": total,
             "page": page,
             "per_page": per_page,
         }
@@ -231,7 +244,7 @@ class WooCommerceConnector(BaseMerchantConnector):
             "order": "desc",
         }
 
-        data = await self._request("GET", "/products", params=params)
+        data, total = await self._request("GET", "/products", params=params, with_total=True)
 
         if not isinstance(data, list):
             return {
@@ -243,7 +256,7 @@ class WooCommerceConnector(BaseMerchantConnector):
 
         return {
             "products": data,
-            "total": len(data),
+            "total": total,
             "page": page,
             "per_page": per_page,
         }
@@ -262,7 +275,7 @@ class WooCommerceConnector(BaseMerchantConnector):
         if search:
             params["search"] = search
 
-        data = await self._request("GET", "/customers", params=params)
+        data, total = await self._request("GET", "/customers", params=params, with_total=True)
 
         if not isinstance(data, list):
             return {
@@ -274,7 +287,7 @@ class WooCommerceConnector(BaseMerchantConnector):
 
         return {
             "customers": data,
-            "total": len(data),
+            "total": total,
             "page": page,
             "per_page": per_page,
         }
